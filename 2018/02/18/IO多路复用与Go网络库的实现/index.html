@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Golang,network," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="去年在读UNP等几本书时都涉及到IO及相关知识，不过由于点很零散，当时没有总结。趁这次看golang net包的机会，结合之前看的比较基础的概念写了这篇博客，记录下现在的理解，方便以后回顾。 IO多路复用Unix网络编程里总结了5种IO模型，其中只有异步IO模型是异步IO，因为只有异步IO的recvfrom是不阻塞进程的。首先每个IO读操作都包括以下两个过程，书里说的异步就是指发起读操作时，数据从">
+<meta name="keywords" content="Golang,network">
+<meta property="og:type" content="article">
+<meta property="og:title" content="IO多路复用与Go网络库的实现">
+<meta property="og:url" content="http://yoursite.com/2018/02/18/IO多路复用与Go网络库的实现/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="去年在读UNP等几本书时都涉及到IO及相关知识，不过由于点很零散，当时没有总结。趁这次看golang net包的机会，结合之前看的比较基础的概念写了这篇博客，记录下现在的理解，方便以后回顾。 IO多路复用Unix网络编程里总结了5种IO模型，其中只有异步IO模型是异步IO，因为只有异步IO的recvfrom是不阻塞进程的。首先每个IO读操作都包括以下两个过程，书里说的异步就是指发起读操作时，数据从">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2018/02/18/IO多路复用与Go网络库的实现/io.png">
+<meta property="og:image" content="http://yoursite.com/2018/02/18/IO多路复用与Go网络库的实现/c-net.jpg">
+<meta property="og:updated_time" content="2018-03-21T16:30:21.549Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="IO多路复用与Go网络库的实现">
+<meta name="twitter:description" content="去年在读UNP等几本书时都涉及到IO及相关知识，不过由于点很零散，当时没有总结。趁这次看golang net包的机会，结合之前看的比较基础的概念写了这篇博客，记录下现在的理解，方便以后回顾。 IO多路复用Unix网络编程里总结了5种IO模型，其中只有异步IO模型是异步IO，因为只有异步IO的recvfrom是不阻塞进程的。首先每个IO读操作都包括以下两个过程，书里说的异步就是指发起读操作时，数据从">
+<meta name="twitter:image" content="http://yoursite.com/2018/02/18/IO多路复用与Go网络库的实现/io.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2018/02/18/IO多路复用与Go网络库的实现/"/>
+
+
+
+
+
+  <title>IO多路复用与Go网络库的实现 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/02/18/IO多路复用与Go网络库的实现/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">IO多路复用与Go网络库的实现</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2018-02-18T12:23:12+08:00">
+                2018-02-18
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/network/" itemprop="url" rel="index">
+                    <span itemprop="name">network</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>去年在读UNP等几本书时都涉及到IO及相关知识，不过由于点很零散，当时没有总结。趁这次看golang net包的机会，结合之前看的比较基础的概念写了这篇博客，记录下现在的理解，方便以后回顾。</p>
+<h2 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h2><p>Unix网络编程里总结了5种IO模型，其中<strong>只有异步IO模型是异步IO</strong>，因为只有<strong>异步IO的recvfrom是不阻塞进程的</strong>。首先每个IO读操作都包括以下两个过程，书里说的异步就是指发起读操作时，数据从内核拷贝到用户空间是否要阻塞进程这个问题。</p>
+<ul>
+<li>等待网络数据到达网卡并读取到内核缓冲区，数据准备好。</li>
+<li>从内核缓冲区复制数据到进程空间。</li>
+</ul>
+<blockquote>
+<p>另外阻塞IO模型和阻塞IO调用是不同的。比如非阻塞IO模型当中其实包含了多次非阻塞IO调用和一次阻塞IO调用，非阻塞IO调用是指在内核无数据准备好时，recvfrom不阻塞进程直接返回，在内核有数据时发起的recvfrom其实还是阻塞的。</p>
+</blockquote>
+<p><img src="/2018/02/18/IO多路复用与Go网络库的实现/io.png" alt="io"></p>
+<p><strong>IO复用是指：</strong>进程阻塞于select，等待多个IO中的任一个变为可读，select调用返回，通知相应IO可以读。 它可以支持单线程响应多个请求这种模式。</p>
+<blockquote>
+<p>它本质上是同步I/O，因为他们都需要在读写事件就绪后自己负责进行读写，也就是说这个读写过程是阻塞的，而异步I/O则无需自己负责进行读写，只需要把buffer提交给内核，内核会负责把数据从内核拷贝到用户空间，然后告诉你已可读。</p>
+</blockquote>
+<h3 id="select-amp-poll"><a href="#select-amp-poll" class="headerlink" title="select &amp; poll"></a>select &amp; poll</h3><p>select poll epoll这三个是常用的IO复用的系统调用。select和poll本质相同，都对同时监听的fd有数量限制，因为他们涉及<strong>大量文件描述符的数组被整体复制于用户态和内核的地址空间之间</strong>，而不论这些文件描述符是否就绪，因此它的开销随着文件描述符数量的增加而线性增大。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">poll</span><span class="params">(struct pollfd *fds, <span class="keyword">nfds_t</span> nfds, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+<ol>
+<li>每次调用select，都需要把fd集合从用户态拷贝到内核态，这个开销在fd很多时会很大</li>
+<li>同时每次调用select都需要在内核遍历传递进来的所有fd，把当前进程加入fd对应的设备等待队列中</li>
+<li>select支持的文件描述符数量太小了，默认是1024</li>
+</ol>
+<h3 id="epoll"><a href="#epoll" class="headerlink" title="epoll"></a>epoll</h3><p>epoll涉及三个系统调用，epoll用来创建epollfd文件描述符（<strong>之后要close</strong>），epoll_ctl用来注册每个描述符及其等待的事件，epoll_wait监听epollfd上注册的事件，内核负责把数据复制到这个 events 数组中。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;sys/epoll.h&gt;  </span></span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_create</span><span class="params">(<span class="keyword">int</span> size)</span></span>;  </span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_ctl</span><span class="params">(<span class="keyword">int</span> epfd, <span class="keyword">int</span> op, <span class="keyword">int</span> fd, struct epoll_event *event)</span></span>;  </span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_wait</span><span class="params">(<span class="keyword">int</span> epfd, struct epoll_event * events, <span class="keyword">int</span> maxevents, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+<ol>
+<li>将fd从用户态到内核态拷贝的过程统一到epoll_ctl，而不是在epoll_wait中每次循环调用都拷贝一次。</li>
+<li>在epoll_ctl时把当前进程挂到fd对应的设备等待队列中，并为每个fd指定一个回调函数。当设备就绪，唤醒等待队列上的等待者时，就会调用这个回调函数，而这个回调函数会把就绪的fd加入一个就绪链表。epoll_wait的工作实际上就是在这个就绪链表中查看有没有就绪的fd，并唤醒在epoll_wait中进入睡眠的进程。</li>
+<li>epoll没有最多fd的这个限制，它所支持的fd上限是最大可以打开文件的数目。</li>
+</ol>
+<h3 id="non-blocking-IO"><a href="#non-blocking-IO" class="headerlink" title="non-blocking IO"></a>non-blocking IO</h3><p><a href="https://github.com/eesly/brpc/blob/master/docs/cn/io.md#the-full-picture" target="_blank" rel="noopener">brpc-io.md</a>中有一段对两种blocking的对比，觉得说的很好，转载一下。</p>
+<blockquote>
+<p>linux一般使用non-blocking IO提高IO并发度。当IO并发度很低时，non-blocking IO不一定比blocking IO更高效，因为后者完全由内核负责，而read/write这类系统调用已高度优化，效率显然高于一般得多个线程协作的non-blocking IO。</p>
+<p>但当IO并发度愈发提高时，blocking IO阻塞一个线程的弊端便显露出来：内核得不停地在线程间切换才能完成有效的工作，一个cpu core上可能只做了一点点事情，就马上又换成了另一个线程，cpu cache没得到充分利用，另外大量的线程会使得依赖thread-local加速的代码性能明显下降，如tcmalloc，一旦malloc变慢，程序整体性能往往也会随之下降。</p>
+<p>而non-blocking IO一般由少量event dispatching线程和一些运行用户逻辑的worker线程组成，这些线程往往会被复用（换句话说调度工作转移到了用户态），event dispatching和worker可以同时在不同的核运行（流水线化），内核不用频繁的切换就能完成有效的工作。线程总量也不用很多，所以对thread-local的使用也比较充分。这时候non-blocking IO就往往比blocking IO快了。</p>
+<p>不过non-blocking IO也有自己的问题，它需要调用更多系统调用，比如<a href="http://man7.org/linux/man-pages/man2/epoll_ctl.2.html" target="_blank" rel="noopener">epoll_ctl</a>，由于epoll实现为一棵红黑树，epoll_ctl并不是一个很快的操作，特别在多核环境下，依赖epoll_ctl的实现往往会面临棘手的扩展性问题。non-blocking需要更大的缓冲，否则就会触发更多的事件而影响效率。non-blocking还得解决不少多线程问题，代码比blocking复杂很多。</p>
+</blockquote>
+<h2 id="服务器常用编程模型"><a href="#服务器常用编程模型" class="headerlink" title="服务器常用编程模型"></a>服务器常用编程模型</h2><p>以下是深入理解计算机系统里经典的echo server。它的问题是这样同步阻塞的服务端无法处理来自客户端的并发请求。解决的方法有两个：使用多线程，或者IO多路复用。多线程的问题是创建进程或线程需要时间和空间，连接多了之后，切换开销很大，占用内存多，多线程修改共享数据产生的竞争条件需要加锁，容易造成死锁。IO复用的问题是不能充分利用多核CPU，且它通常要求事件的回调函数必须是非阻塞的。</p>
+<ul>
+<li><strong>多线程：</strong>accept了之后new thread or process来处理这个connfd上的请求。</li>
+<li><strong>IO多路复用：</strong>non-blocking IO+IO multiplexing这种Reactor模式。基本结构是一个event loop，以事件驱动和事件回调的方式实现业务逻辑。</li>
+</ul>
+<blockquote>
+<p>server： socket + bind + listen + accept + ——- + close<br>client:  socket + connect + ——— + close</p>
+</blockquote>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//bind&amp;listen</span></span><br><span class="line"><span class="keyword">while</span>(<span class="number">1</span>) &#123;</span><br><span class="line">  connfd = accept(listenfd, (struct) sockaddr *) &amp;clientaddr, &amp;clientlen);</span><br><span class="line">  <span class="comment">// read(connfd, buf, BUFSIZE);</span></span><br><span class="line">  <span class="comment">// write(connfd, buf, strlen(buf));</span></span><br><span class="line">  close(connfd);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="reactor"><a href="#reactor" class="headerlink" title="reactor"></a>reactor</h3><p>实际上目前的高性能服务器很多都用的是reactor模式，即non-blocking IO+IO multiplexing的方式。通常主线程只做event-loop，通过epoll_wait等方式监听事件，而处理客户请求是在其他工作线程中完成。小伙伴有个测试经群效应的例子<a href="https://github.com/eesly/thundering_herd_problem/blob/master/server_epoll.cpp" target="_blank" rel="noopener">thundering_herd_problem</a>就是用epoll来处理连接和请求，可参考。下图来自<a href="https://segmentfault.com/a/1190000005132717" target="_blank" rel="noopener">Golang网络层实现</a>总结的传统网络实现。</p>
+<ul>
+<li>server端在<code>bind&amp;listen</code>后，将listenfd注册到epollfd中，最后进入<code>epoll_wait</code>循环。循环过程中若有在listenfd上的event则调用<code>socket.accept</code>，并将connfd加入到epollfd的IO复用队列。</li>
+<li>当connfd上有数据到来或写缓冲有数据可以出发epoll_wait的返回，这里读写IO都是非阻塞IO，这样才不会阻塞epoll的下一个循环。然而，这样容易割裂业务逻辑，不易理解和维护。</li>
+<li>read后数据进行解码并放入队列中，等待工作线程处理。</li>
+</ul>
+<p>accept连接以及conn上读写若是在主线程完成，则要求是非阻塞IO，因为IO操作不能阻塞epoll_wait循环。<strong>实际上event loop可能也可以是多线程的，只是单个线程里只有一个epoll_wait</strong>。</p>
+<p><img src="/2018/02/18/IO多路复用与Go网络库的实现/c-net.jpg" alt="io"></p>
+<h3 id="goroutine"><a href="#goroutine" class="headerlink" title="goroutine"></a>goroutine</h3><p>Go因为有goroutine，所以可以采用多协程来解决并发问题。accept连接后，将连接丢给goroutine处理后续的读写操作。在开发者看到的这个goroutine中业务逻辑是同步的，也不用考虑IO是否阻塞。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    ln, err := net.Listen(<span class="string">"tcp"</span>, <span class="string">":8080"</span>)</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        conn, _ := ln.Accept()</span><br><span class="line">        <span class="keyword">go</span> echoFunc(conn)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>可以肯定的是，在linux上Go语言写的网络服务器也是采用的epoll作为最底层的数据收发驱动，Go语言网络的底层实现中同样存在“上下文切换”的工作，只是这个切换工作由runtime的调度器来做了，减少了程序员的负担。</p>
+</blockquote>
+<h2 id="go-net-core"><a href="#go-net-core" class="headerlink" title="go net core"></a>go net core</h2><p>golang的net如何实现对epoll的封装，在使用上看上去同步编程的呢，这是本节的问题。总结来说，所有的网络操作都以网络描述符netFD为中心实现。netFD与底层PollDesc结构绑定，当在一个netFD上读写遇到EAGAIN错误时，就将当前goroutine存储到这个netFD对应的PollDesc中，同时将goroutine给park住，直到这个netFD上再次发生读写事件，才将此goroutine给ready激活重新运行。显然，在底层通知goroutine再次发生读写等事件的方式就是epoll等事件驱动机制。</p>
+<h3 id="netFD"><a href="#netFD" class="headerlink" title="netFD"></a>netFD</h3><p>服务端通过listen建立起的<code>Listener</code>是个实现了<strong>Accept Close</strong>等方法的接口。通过listener的<code>Accept</code>方法返回的Conn是一个实现了<strong>Read Write</strong>等方法的接口。Listener和Conn的实现都包含一个网络文件描述符netFD，它其中包含一个重要的数据结构pollDesc，它是底层事件驱动的封装。</p>
+<ol>
+<li>服务端的netFD在<code>listen</code>时会创建epoll的实例，并将listenFD加入epoll的事件队列</li>
+<li>netFD在<code>accept</code>时将返回的connFD也加入epoll的事件队列</li>
+<li>netFD在读写时出现<code>syscall.EAGAIN</code>错误，通过pollDesc将当前的goroutine park住，直到ready，从pollDesc的<code>waitRead</code>中返回</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">type TCPListener struct &#123;</span><br><span class="line">    fd *netFD</span><br><span class="line">&#125;</span><br><span class="line">type netFD struct &#123;</span><br><span class="line">    // 省略其他成员</span><br><span class="line">    pd pollDesc</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在<code>net.Listen</code>过程中，新建了描述listenFD的数据结构<code>netFD</code>，并在netFD的<code>listenStream</code>方法中实现了建立socket的bind&amp;listen和netFD的初始化。polldesc的init初始化了底层的epoll实例，并将fd添加到了epoll的事件队列中。<code>ln.Accept()</code> 实际上通过netFD的accept，用系统调用accept返回的connFD新建一个新的netFD并初始化，即把它也加入到epoll的事件队列中。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fd *netFD)</span> <span class="title">init</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> err := fd.pd.init(fd); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>netFD的<code>Read</code>操作在系统调用Read后，当有syscall.EAGAIN错误发生时，<code>WaitRead</code>将当前读这个connFD的goroutine给park住，直到这个connFD上的读事件再次发生为止，<code>waitRead</code>调用返回，继续for循环的执行。netFD的Write方法和Read的实现原理是一样的，都是在碰到EAGAIN错误的时候将当前goroutine给park住直到socket再次可写为止。</p>
+<blockquote>
+<p>这样的实现，就让调用netFD的Read的地方变成了同步阻塞方式。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fd *netFD)</span> <span class="title">Read</span><span class="params">(p []<span class="keyword">byte</span>)</span> <span class="params">(n <span class="keyword">int</span>, err error)</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        n, err = syscall.Read(fd.sysfd, p)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            n = <span class="number">0</span></span><br><span class="line">            <span class="keyword">if</span> err == syscall.EAGAIN &#123;</span><br><span class="line">                <span class="keyword">if</span> err = fd.pd.waitRead(); err == <span class="literal">nil</span> &#123;</span><br><span class="line">                    <span class="keyword">continue</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        err = fd.eofError(n, err)</span><br><span class="line">        <span class="keyword">break</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="polldesc"><a href="#polldesc" class="headerlink" title="polldesc"></a>polldesc</h3><p>polldesc的初始化通过runtime层封装的pollServerInit 实现了epoll实例的sync.Once的初始化。初始化时通过netpollinit实现的，在linux上更底层就是epoll_create创建了epollFD。初始化的第二步是要加入epoll的事件队列，通过<code>runtime_pollOpen</code>实现。其中netpollopen在linux上就是epoll_ctl。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(pd *pollDesc)</span> <span class="title">init</span><span class="params">(fd *netFD)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    serverInit.Do(runtime_pollServerInit)</span><br><span class="line">    ctx, errno := runtime_pollOpen(<span class="keyword">uintptr</span>(fd.sysfd))</span><br><span class="line">    pd.runtimeCtx = ctx</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">net_runtime_pollServerInit</span><span class="params">()</span></span> &#123;</span><br><span class="line">    netpollinit()</span><br><span class="line">    atomic.Store(&amp;netpollInited, <span class="number">1</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">net_runtime_pollOpen</span><span class="params">(fd <span class="keyword">uintptr</span>)</span> <span class="params">(*pollDesc, <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    pd := pollcache.alloc()</span><br><span class="line">    ...</span><br><span class="line">    errno = netpollopen(fd, pd)</span><br><span class="line">    <span class="keyword">return</span> pd, <span class="keyword">int</span>(errno)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>最后在netFD实现阻塞的pd.waitRead是通过netpollblock实现的，即gopark当前goroutine，直到IO ready才从netpollblock中返回。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(pd *pollDesc)</span> <span class="title">wait</span><span class="params">(mode <span class="keyword">int</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    res := runtime_pollWait(pd.runtimeCtx, mode)</span><br><span class="line">    <span class="keyword">return</span> convertErr(res)</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">net_runtime_pollWait</span><span class="params">(pd *pollDesc, mode <span class="keyword">int</span>)</span> <span class="title">int</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> !netpollblock(pd, <span class="keyword">int32</span>(mode), <span class="literal">false</span>) &#123;</span><br><span class="line">        err = netpollcheckerr(pd, <span class="keyword">int32</span>(mode))</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>如何实现IO ready的通知，让陷入IO wait的goroutine重新被调度呢，这个跟proc.go里的调度有关。在goroutine调度器<code>findrunnable</code>可运行的goroutine时，将不阻塞的执行netpoll，即执行epollwait，监听等待在epollFD上的事件队列里的FD是否就绪，有则wakeUp这个goutine开始运行，也就使这个netpollblock可以返回，使netFD解除阻塞。</p>
+</blockquote>
+<h3 id="netpoll-epoll"><a href="#netpoll-epoll" class="headerlink" title="netpoll_epoll"></a>netpoll_epoll</h3><p>上面提到的net_runtime_pollServerInit和net_runtime_pollOpen都是对底层事件驱动机制的封装，封装的意义在于屏蔽不同操作系统的实现细节。在linux上是通过runtime包中的<code>netpoll_epoll.go</code>实现的。它封装了epoll的三个系统调用，即epoll_create epoll_ctl和epoll_wait。</p>
+<p>它封装成了四个runtime函数。<strong>netpollinit</strong> 使用epoll_create创建epollfd，<strong>netpollopen</strong> 添加一个fd到epoll中，这里的数据结构称为pollDesc，它一开始都关注了<strong>读写事件</strong>，并且采用的是<strong>边缘触发</strong>。<strong>netpollclose</strong>函数就是从epoll删除一个fd。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">netpollopen</span><span class="params">(fd <span class="keyword">uintptr</span>, pd *pollDesc)</span> <span class="title">int32</span></span> &#123;</span><br><span class="line">    <span class="keyword">var</span> ev epollevent</span><br><span class="line">    ev.events = _EPOLLIN | _EPOLLOUT | _EPOLLRDHUP | _EPOLLET</span><br><span class="line">    *(**pollDesc)(unsafe.Pointer(&amp;ev.data)) = pd</span><br><span class="line">    <span class="keyword">return</span> -epollctl(epfd, _EPOLL_CTL_ADD, <span class="keyword">int32</span>(fd), &amp;ev)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p><code>EPOLLRDHUP</code>，这个事件是在较新的内核版本添加的，目的是解决对端socket关闭，epoll本身并不能直接感知到这个关闭动作的问题。</p>
+</blockquote>
+<p><strong>netpoll</strong> 就是从epoll wait得到所有发生事件的fd，<strong>并将每个fd对应的goroutine通过链表返回</strong>。<strong>这个操作是在goroutine调度器中使用的，用来将因为IO wait而阻塞的goroutine重新调度。</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">netpoll</span><span class="params">(block <span class="keyword">bool</span>)</span> *<span class="title">g</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> epfd == <span class="number">-1</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    waitms := <span class="keyword">int32</span>(<span class="number">-1</span>)</span><br><span class="line">    <span class="keyword">if</span> !block &#123;</span><br><span class="line">        waitms = <span class="number">0</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">var</span> events [<span class="number">128</span>]epollevent</span><br><span class="line">retry:</span><br><span class="line">    n := epollwait(epfd, &amp;events[<span class="number">0</span>], <span class="keyword">int32</span>(<span class="built_in">len</span>(events)), waitms)</span><br><span class="line">    <span class="keyword">if</span> n &lt; <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">goto</span> retry</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">var</span> gp guintptr</span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">int32</span>(<span class="number">0</span>); i &lt; n; i++ &#123;</span><br><span class="line">        ev := &amp;events[i]</span><br><span class="line">        <span class="keyword">var</span> mode <span class="keyword">int32</span></span><br><span class="line">        <span class="keyword">if</span> ev.events&amp;(_EPOLLIN|_EPOLLRDHUP|_EPOLLHUP|_EPOLLERR) != <span class="number">0</span> &#123;</span><br><span class="line">            mode += <span class="string">'r'</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> ev.events&amp;(_EPOLLOUT|_EPOLLHUP|_EPOLLERR) != <span class="number">0</span> &#123;</span><br><span class="line">            mode += <span class="string">'w'</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> mode != <span class="number">0</span> &#123;</span><br><span class="line">            pd := *(**pollDesc)(unsafe.Pointer(&amp;ev.data))</span><br><span class="line">            netpollready(&amp;gp, pd, mode)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> block &amp;&amp; gp == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">goto</span> retry</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> gp.ptr()</span><br></pre></td></tr></table></figure>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><a href="http://blog.csdn.net/tjiyu/article/details/52959418" target="_blank" rel="noopener">5种IO模型的总结</a></li>
+<li><a href="http://blog.csdn.net/tennysonsky/article/details/45745887" target="_blank" rel="noopener">I/O多路复用select、poll、epoll的区别使用</a></li>
+<li><a href="https://www.jianshu.com/p/dfd940e7fca2" target="_blank" rel="noopener">聊聊IO多路复用</a></li>
+<li><a href="https://juejin.im/post/59f9c6d66fb9a0450e75713f" target="_blank" rel="noopener">IO多路复用原理剖析</a></li>
+<li><a href="http://skoo.me/go/2014/04/21/go-net-core" target="_blank" rel="noopener">深入Go语言网络库的基础实现</a></li>
+<li><a href="https://segmentfault.com/a/1190000005132717" target="_blank" rel="noopener">Golang网络层实现</a></li>
+</ul>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Golang/" rel="tag"># Golang</a>
+          
+            <a href="/tags/network/" rel="tag"># network</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/01/10/KubeController异步事件处理Infomer的实现/" rel="next" title="KubeController异步事件处理Infomer的实现">
+                <i class="fa fa-chevron-left"></i> KubeController异步事件处理Infomer的实现
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/02/19/HTTP协议与Go的实现/" rel="prev" title="HTTP协议与Go的实现">
+                HTTP协议与Go的实现 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/nino.jpg"
+                alt="nino" />
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">25</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/ninokop" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="http://weibo.com/u/1732126300" target="_blank" title="WeiBo">
+                    
+                      <i class="fa fa-fw fa-globe"></i>WeiBo</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#IO多路复用"><span class="nav-number">1.</span> <span class="nav-text">IO多路复用</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#select-amp-poll"><span class="nav-number">1.1.</span> <span class="nav-text">select &amp; poll</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#epoll"><span class="nav-number">1.2.</span> <span class="nav-text">epoll</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#non-blocking-IO"><span class="nav-number">1.3.</span> <span class="nav-text">non-blocking IO</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#服务器常用编程模型"><span class="nav-number">2.</span> <span class="nav-text">服务器常用编程模型</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#reactor"><span class="nav-number">2.1.</span> <span class="nav-text">reactor</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#goroutine"><span class="nav-number">2.2.</span> <span class="nav-text">goroutine</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#go-net-core"><span class="nav-number">3.</span> <span class="nav-text">go net core</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#netFD"><span class="nav-number">3.1.</span> <span class="nav-text">netFD</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#polldesc"><span class="nav-number">3.2.</span> <span class="nav-text">polldesc</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#netpoll-epoll"><span class="nav-number">3.3.</span> <span class="nav-text">netpoll_epoll</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference"><span class="nav-number">4.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.3</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="HTTP,watch," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="ServerPush &amp;amp; ClientPull前两天总结了一下HTTP2相关的发展过程，其中最重要的两点是：实现了服务端Push和多路复用。本篇结合目前见过的一些实现Push&amp;amp;Pull的实例，总结一下数据交互的实现方式：  etcd v2里的长轮询 long polling的方式 k8s-apiserver的stream的方式 service center和config cente">
+<meta name="keywords" content="HTTP,watch">
+<meta property="og:type" content="article">
+<meta property="og:title" content="实现Watch的Server Push与Client Poll方式">
+<meta property="og:url" content="http://yoursite.com/2018/04/25/实现Watch的Server-Push与Client-Poll方式/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="ServerPush &amp;amp; ClientPull前两天总结了一下HTTP2相关的发展过程，其中最重要的两点是：实现了服务端Push和多路复用。本篇结合目前见过的一些实现Push&amp;amp;Pull的实例，总结一下数据交互的实现方式：  etcd v2里的长轮询 long polling的方式 k8s-apiserver的stream的方式 service center和config cente">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2018/04/25/实现Watch的Server-Push与Client-Poll方式/frame.jpg">
+<meta property="og:updated_time" content="2018-04-27T01:39:54.922Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="实现Watch的Server Push与Client Poll方式">
+<meta name="twitter:description" content="ServerPush &amp;amp; ClientPull前两天总结了一下HTTP2相关的发展过程，其中最重要的两点是：实现了服务端Push和多路复用。本篇结合目前见过的一些实现Push&amp;amp;Pull的实例，总结一下数据交互的实现方式：  etcd v2里的长轮询 long polling的方式 k8s-apiserver的stream的方式 service center和config cente">
+<meta name="twitter:image" content="http://yoursite.com/2018/04/25/实现Watch的Server-Push与Client-Poll方式/frame.jpg">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2018/04/25/实现Watch的Server-Push与Client-Poll方式/"/>
+
+
+
+
+
+  <title>实现Watch的Server Push与Client Poll方式 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/04/25/实现Watch的Server-Push与Client-Poll方式/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">实现Watch的Server Push与Client Poll方式</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2018-04-25T00:40:13+08:00">
+                2018-04-25
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/network/" itemprop="url" rel="index">
+                    <span itemprop="name">network</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h2 id="ServerPush-amp-ClientPull"><a href="#ServerPush-amp-ClientPull" class="headerlink" title="ServerPush &amp; ClientPull"></a>ServerPush &amp; ClientPull</h2><p>前两天总结了一下HTTP2相关的发展过程，其中最重要的两点是：<strong>实现了服务端Push和多路复用</strong>。本篇结合目前见过的一些实现Push&amp;Pull的实例，总结一下数据交互的实现方式：</p>
+<ol>
+<li>etcd v2里的长轮询 long polling的方式</li>
+<li>k8s-apiserver的stream的方式</li>
+<li>service center和config center的websocket的方式</li>
+<li>gRPC也就是http2的server push方式</li>
+</ol>
+<h2 id="long-polling"><a href="#long-polling" class="headerlink" title="long polling"></a>long polling</h2><blockquote>
+<p>由于http1.x没有服务端push的机制，为了watch服务端的数据变化，最简单的办法当然是客户端去pull：客户端每隔定长时间去服务端拉数据同步，无论有没有服务端有没有数据变化。但是必然存在<strong>通知不及时和大量无效的轮询的问题。</strong>long polling就是在这个polling的基础上的优化，当客户端发起long polling时，如果服务端没有相关数据，会hold住请求，直到服务端有数据要发或者超时才会返回。</p>
+</blockquote>
+<h3 id="client"><a href="#client" class="headerlink" title="client"></a>client</h3><p>etcdv2是个比较典型的long polling的例子。下面是客户端keysAPI的代码，它通过Watcher接口返回一个实现了Next方法的实例，客户端通过循环调用Next获得所有服务端事件。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Watcher(key <span class="keyword">string</span>, opts *WatcherOptions) Watcher</span><br></pre></td></tr></table></figure>
+<p>Next方法里client只是发了标记为wait的请求，通过统一的transport发到服务端。nexWait是用来生成请求体的，请求体的方法为GET，只是params带了wait字段，让服务端识别。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(hw *httpWatcher)</span> <span class="title">Next</span><span class="params">(ctx context.Context)</span> <span class="params">(*Response, error)</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        httpresp, body, err := hw.client.Do(ctx, &amp;hw.nextWait)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">        &#125;</span><br><span class="line">        resp, err := unmarshalHTTPResponse(httpresp.StatusCode,</span><br><span class="line">          httpresp.Header, body)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> err == ErrEmptyBody &#123;</span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">        &#125;</span><br><span class="line">        hw.nextWait.WaitIndex = resp.Node.ModifiedIndex + <span class="number">1</span></span><br><span class="line">        <span class="keyword">return</span> resp, <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="server"><a href="#server" class="headerlink" title="server"></a>server</h3><blockquote>
+<p>github.com/etcd/etcdserver/api/v2http/client.go</p>
+</blockquote>
+<p>对应etcdv2的服务端<code>keysHandler</code>的处理过程是：调用etcdServer的Do方法，根据v2apistore的Get返回event或者watcher。如果请求中有wait字段，那么会返回一个kvStrore的watcher。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *keysHandler)</span> <span class="title">ServeHTTP</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">    resp, err := h.server.Do(ctx, rr)</span><br><span class="line">    <span class="keyword">switch</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> resp.Watcher != <span class="literal">nil</span>:</span><br><span class="line">        ctx, cancel := context.WithTimeout(</span><br><span class="line">          context.Background(), defaultWatchTimeout)</span><br><span class="line">        <span class="keyword">defer</span> cancel()</span><br><span class="line">        handleKeyWatch(ctx, w, resp, rr.Stream)</span><br><span class="line">        ...</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在处理watch请求时，通常都是使用context设置超时时间，但是这里defaultWatchTimeout设置的是maxInt64，所以watch的超时是客户端决定的，当超时发生close连接，server通过<code>CloseNotifier</code>得到通知并放弃处理。</p>
+<blockquote>
+<p>CloseNotifier Flusher</p>
+</blockquote>
+<p>服务端首先把header flush到连接上，以免客户端等待header超时。之后等待内部kvstore的chan上有事件准备好，并发送。stream这个参数在etcdv2这个场景下为false，也就是long pollling获得数据即可以返回。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">handleKeyWatch</span><span class="params">(ctx context.Context, w http.ResponseWriter,</span></span></span><br><span class="line"><span class="function"><span class="params">    resp etcdserver.Response, stream <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">    wa := resp.Watcher</span><br><span class="line">    <span class="keyword">defer</span> wa.Remove()</span><br><span class="line">    ech := wa.EventChan()</span><br><span class="line"></span><br><span class="line">    w.Header().Set(<span class="string">"Content-Type"</span>, <span class="string">"application/json"</span>)</span><br><span class="line">    w.Header().Set(<span class="string">"X-Etcd-Index"</span>, fmt.Sprint(wa.StartIndex()))</span><br><span class="line">    w.Header().Set(<span class="string">"X-Raft-Index"</span>, fmt.Sprint(resp.Index))</span><br><span class="line">    w.Header().Set(<span class="string">"X-Raft-Term"</span>, fmt.Sprint(resp.Term))</span><br><span class="line">    w.WriteHeader(http.StatusOK)</span><br><span class="line">    <span class="comment">// Ensure headers are flushed early, in case of long polling</span></span><br><span class="line">    w.(http.Flusher).Flush()</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> &lt;-nch: <span class="comment">// CloseNotifier, Client closed connection. Nothing to do.</span></span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        <span class="keyword">case</span> &lt;-ctx.Done(): <span class="comment">// Timed out.</span></span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        <span class="keyword">case</span> ev, ok := &lt;-ech:</span><br><span class="line">            <span class="keyword">if</span> !ok &#123;</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            ev = trimEventPrefix(ev, etcdserver.StoreKeysPrefix)</span><br><span class="line">            <span class="keyword">if</span> err := json.NewEncoder(w).Encode(ev); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                plog.Warningf(<span class="string">"error writing event (%v)"</span>, err)</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> !stream &#123;</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            w.(http.Flusher).Flush()</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="streaming"><a href="#streaming" class="headerlink" title="streaming"></a>streaming</h2><p>stream是要在同一个连接上，分多个部分发送HTTP响应。一般HTTP的响应中发送的数据是整个发送，并且通过Content-Length消息头字段表示数据的长度。如果分多块传输，需要另外的编码方式，于是<code>Chunked</code>编码（分块传输编码）引入到了HTTP1.1协议中。它允许HTTP服务端动态生成内容，消息体由数量未定的块组成，并且以最后一个大小为0的块结束。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">HTTP/<span class="number">1.1</span> <span class="number">200</span> OK</span><br><span class="line">Content-Type: text/plain</span><br><span class="line">Transfer-Encoding: chunked</span><br><span class="line"><span class="number">25</span></span><br><span class="line">This is the <span class="keyword">data</span> <span class="keyword">in</span> the first chunk</span><br><span class="line"><span class="number">1</span>C</span><br><span class="line">and this is the second one</span><br><span class="line"><span class="number">3</span></span><br><span class="line">con</span><br><span class="line"><span class="number">8</span> </span><br><span class="line">sequence</span><br><span class="line"><span class="number">0</span></span><br></pre></td></tr></table></figure>
+<h3 id="server-amp-serveWatch"><a href="#server-amp-serveWatch" class="headerlink" title="server &amp; serveWatch"></a>server &amp; serveWatch</h3><p>k8s的服务端watch接口是通过etcd的watch接口实现的长连接方式。最终注册到go-restful的Watch路由，对应GET方法和ListResource这个handlerFunc。</p>
+<blockquote>
+<p>k8s.io/apiserver/pkg/endpoints</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">ListResource</span><span class="params">(r rest.Lister, rw rest.Watcher, scope RequestScope,</span></span></span><br><span class="line"><span class="function"><span class="params">    forceWatch <span class="keyword">bool</span>, minRequestTimeout time.Duration)</span> <span class="title">http</span>.<span class="title">HandlerFunc</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, req *http.Request)</span></span> &#123;</span><br><span class="line">        <span class="keyword">if</span> opts.Watch || forceWatch &#123;</span><br><span class="line">            <span class="keyword">if</span> rw == <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            timeout := time.Duration(<span class="number">0</span>)</span><br><span class="line">            <span class="keyword">if</span> opts.TimeoutSeconds != <span class="literal">nil</span> &#123;</span><br><span class="line">                timeout = time.Duration(*opts.TimeoutSeconds) * time.Second</span><br><span class="line">            &#125;</span><br><span class="line">            watcher, err := rw.Watch(ctx, &amp;opts)</span><br><span class="line">            <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                scope.err(err, w, req)</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            serveWatch(watcher, scope, req, w, timeout)</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中watcher是内部storage通过etcd的watch接口封装的返回事件的chan。serveWatch就是在处理这个内部chan，并把chan上发生的事件通过chunk编码发给客户端。这个循环可能因为客户端close连接或超时而结束。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">serveWatch</span><span class="params">(watcher watch.Interface, scope RequestScope,</span></span></span><br><span class="line"><span class="function"><span class="params">    req *http.Request, w http.ResponseWriter, timeout time.Duration)</span></span> &#123;</span><br><span class="line">    <span class="comment">// negotiate for the stream serializer ...</span></span><br><span class="line">    server := &amp;WatchServer&#123;</span><br><span class="line">        Watching:        watcher,</span><br><span class="line">        Scope:           scope,</span><br><span class="line">        UseTextFraming:  useTextFraming,</span><br><span class="line">        MediaType:       mediaType + <span class="string">";stream=watch"</span>,</span><br><span class="line">        Framer:          framer,</span><br><span class="line">        Encoder:         encoder,</span><br><span class="line">        EmbeddedEncoder: embeddedEncoder,</span><br><span class="line">        Fixup:           <span class="function"><span class="keyword">func</span><span class="params">(obj runtime.Object)</span></span> &#123;&#125;,</span><br><span class="line">        TimeoutFactory:  &amp;realTimeoutFactory&#123;timeout&#125;,</span><br><span class="line">    &#125;</span><br><span class="line">    server.ServeHTTP(w, req)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *WatchServer)</span> <span class="title">ServeHTTP</span><span class="params">(w http.ResponseWriter, req *http.Request)</span></span> &#123;</span><br><span class="line">    <span class="comment">// if isWebSocketRequest</span></span><br><span class="line">    cn, ok1 := w.(http.CloseNotifier)</span><br><span class="line">    flusher, ok2 := w.(http.Flusher)</span><br><span class="line">    <span class="keyword">if</span> !ok1 || !ok2 &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    framer := s.Framer.NewFrameWriter(w)</span><br><span class="line">    e := streaming.NewEncoder(framer, s.Encoder)</span><br><span class="line">    timeoutCh, cleanup := s.TimeoutFactory.TimeoutCh()</span><br><span class="line"></span><br><span class="line">    w.Header().Set(<span class="string">"Content-Type"</span>, s.MediaType)</span><br><span class="line">    w.Header().Set(<span class="string">"Transfer-Encoding"</span>, <span class="string">"chunked"</span>)</span><br><span class="line">    w.WriteHeader(http.StatusOK)</span><br><span class="line">    flusher.Flush()</span><br><span class="line"></span><br><span class="line">    buf := &amp;bytes.Buffer&#123;&#125;</span><br><span class="line">    ch := s.Watching.ResultChan()</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> &lt;-cn.CloseNotify():</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        <span class="keyword">case</span> &lt;-timeoutCh:</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        <span class="keyword">case</span> event, ok := &lt;-ch:</span><br><span class="line">            <span class="keyword">if</span> !ok &#123;</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            obj := event.Object</span><br><span class="line">            s.EmbeddedEncoder.Encode(obj, buf)</span><br><span class="line"></span><br><span class="line">            unknown.Raw = buf.Bytes()</span><br><span class="line">            event.Object = &amp;unknown</span><br><span class="line">            metav1.Convert_versioned_InternalEvent_to_versioned_Event(</span><br><span class="line">                metav1.InternalEvent(event),</span><br><span class="line">                &amp;metav1.WatchEvent&#123;&#125;, <span class="literal">nil</span>)</span><br><span class="line"></span><br><span class="line">            e.Encode(outEvent)</span><br><span class="line">            <span class="keyword">if</span> <span class="built_in">len</span>(ch) == <span class="number">0</span> &#123;</span><br><span class="line">                flusher.Flush()</span><br><span class="line">            &#125;</span><br><span class="line">            buf.Reset()</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="registry-amp-storage"><a href="#registry-amp-storage" class="headerlink" title="registry &amp; storage"></a>registry &amp; storage</h3><blockquote>
+<p>这一节本来跟stream没有关系，但它是对etcd的watch的封装所以还是记一下。</p>
+</blockquote>
+<p>上面内部watcher是<code>rest.StandardStorage</code>接口，它是以下所有接口的组合。它的实现<code>registry.Store</code>提供了N个函数挂载点，对所有资源类型提供了统一的实现。比如每种资源都实现了NewFunc和KeyFunc，Store统一实现Creater接口实现对每种资源的创建，并最终调用storage包面向etcd的接口实现到后端数据库的持久化。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> StandardStorage <span class="keyword">interface</span> &#123;</span><br><span class="line">    Getter</span><br><span class="line">    Lister</span><br><span class="line">    CreaterUpdater</span><br><span class="line">    GracefulDeleter</span><br><span class="line">    CollectionDeleter</span><br><span class="line">    Watcher</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>比如store封装的watch接口最终到storage里面向etcd的watch接口。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *Store)</span> <span class="title">Watch</span><span class="params">(ctx context.Context, </span></span></span><br><span class="line"><span class="function"><span class="params">    options *metainternalversion.ListOptions)</span> <span class="params">(watch.Interface, error)</span></span> &#123;</span><br><span class="line">	predicate := e.PredicateFunc(labels.Everything(), fields.Everything())</span><br><span class="line">	<span class="keyword">return</span> e.WatchPredicate(ctx, predicate, options.ResourceVersion)</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *Store)</span> <span class="title">WatchPredicate</span><span class="params">(ctx context.Context, </span></span></span><br><span class="line"><span class="function"><span class="params">    p storage.SelectionPredicate, resourceVersion <span class="keyword">string</span>)</span></span></span><br><span class="line"><span class="function">    <span class="params">(watch.Interface, error)</span></span> &#123;</span><br><span class="line">    ...</span><br><span class="line">	w, err := e.Storage.WatchList(ctx, e.KeyRootFunc(ctx), resourceVersion, p)</span><br><span class="line">	<span class="keyword">return</span> w, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>etcdHelper这个包封装了etcdv2的接口，最终是通过循环处理Watcher.Next来实现内部事件的产生。这个过程还涉及到storage的watch cache。详细过程下一次写watch cache再写吧。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *etcdHelper)</span> <span class="title">WatchList</span><span class="params">(ctx context.Context, key <span class="keyword">string</span>, </span></span></span><br><span class="line"><span class="function"><span class="params">resourceVersion <span class="keyword">string</span>, pred storage.SelectionPredicate)</span> <span class="params">(watch.Interface, error)</span></span> &#123;</span><br><span class="line">	key = path.Join(h.pathPrefix, key)</span><br><span class="line">	w := newEtcdWatcher(<span class="literal">true</span>, h.quorum, exceptKey(key), pred, </span><br><span class="line">         h.codec, h.versioner, <span class="literal">nil</span>, h.transformer, h)</span><br><span class="line">	<span class="keyword">go</span> w.etcdWatch(ctx, h.etcdKeysAPI, key, resourceVersion)</span><br><span class="line">	<span class="keyword">return</span> w, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(w *etcdWatcher)</span> <span class="title">etcdWatch</span><span class="params">(ctx context.Context, client etcd.KeysAPI, </span></span></span><br><span class="line"><span class="function"><span class="params">    key <span class="keyword">string</span>, resourceVersion <span class="keyword">uint64</span>)</span></span> &#123;</span><br><span class="line">    watcher := client.Watcher(key, &amp;opts)</span><br><span class="line">	w.ctx, w.cancel = context.WithCancel(ctx)</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		resp, err := watcher.Next(w.ctx)</span><br><span class="line">		w.etcdIncoming &lt;- resp</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="client-1"><a href="#client-1" class="headerlink" title="client"></a>client</h3><p>客户端通过Do获取到服务端的第一个Header响应。最后通过StreamWatcher封装好watch的ResultChan接口，它从连接上decoder反序列化数据由streamWatcher封装好返回。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *Request)</span> <span class="title">Watch</span><span class="params">()</span> <span class="params">(watch.Interface, error)</span></span> &#123;</span><br><span class="line">	url := r.URL().String()</span><br><span class="line">	req, err := http.NewRequest(r.verb, url, r.body)</span><br><span class="line">	req.Header = r.headers</span><br><span class="line">	client := r.client</span><br><span class="line">	</span><br><span class="line">    resp, err := client.Do(req)</span><br><span class="line">	<span class="keyword">if</span> resp.StatusCode != http.StatusOK &#123;</span><br><span class="line">		<span class="keyword">defer</span> resp.Body.Close()</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, fmt.Errorf(<span class="string">"got status: %v"</span>, resp.StatusCode)</span><br><span class="line">	&#125;</span><br><span class="line">	framer := r.serializers.Framer.NewFrameReader(resp.Body)</span><br><span class="line">	decoder := streaming.NewDecoder(framer, r.serializers.StreamingSerializer)</span><br><span class="line">	<span class="keyword">return</span> watch.NewStreamWatcher(</span><br><span class="line">      restclientwatch.NewDecoder(decoder, r.serializers.Decoder)), <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个接口最常见的地方是在<code>reflector</code>的<code>listWatch</code>当中， 在watch循环中通常客户端会指定超时时间<code>5分钟</code>，好让服务端知道什么时候超时结束。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> &#123;</span><br><span class="line">	timeoutSeconds:=<span class="keyword">int64</span>(minWatchTimeout.Seconds()*(rand.Float64()+<span class="number">1.0</span>))</span><br><span class="line">	options = metav1.ListOptions&#123;</span><br><span class="line">		ResourceVersion: resourceVersion,</span><br><span class="line">		TimeoutSeconds: &amp;timeoutSeconds,</span><br><span class="line">	&#125;</span><br><span class="line">	w, err := r.listerWatcher.Watch(options)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">switch</span> err &#123;</span><br><span class="line">		<span class="keyword">case</span> io.EOF:<span class="comment">// watch closed normally</span></span><br><span class="line">		<span class="keyword">case</span> io.ErrUnexpectedEOF:</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	r.watchHandler(w, &amp;resourceVersion, resyncerrc, stopCh)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="web-socket"><a href="#web-socket" class="headerlink" title="web-socket"></a>web-socket</h2><p>上面的两种方式，其实都非常浪费资源。长轮询必须不停连接，长连接必须保持HTTP连接始终打开。websocket就是另一种解决服务端push的方法。简单来说，它是建立在TCP协议之上的ws协议，它跟HTTP协议有良好的兼容性，数据格式比较轻量，可以发送文本，也可以二进制。</p>
+<p>WebSocket复用了HTTP一部分握手过程。客户端通过HTTP请求与WebSocket服务端协商要求升级协议。协议升级完成后，后续的数据交换则遵照WebSocket的协议。以下是客户端发出的请求。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">GET / HTTP/<span class="number">1.1</span></span><br><span class="line">Host: localhost:<span class="number">8080</span></span><br><span class="line">Origin: http://<span class="number">127.0</span>.<span class="number">0.1</span>:<span class="number">3000</span></span><br><span class="line">Connection: Upgrade</span><br><span class="line">Upgrade: websocket</span><br><span class="line">Sec-WebSocket-Version: <span class="number">13</span></span><br><span class="line">Sec-WebSocket-Key: w4v7O6xFTi36lq3RNcgctw==</span><br></pre></td></tr></table></figure>
+<p>服务端回应101表示切换协议。具体协议参考<a href="https://tools.ietf.org/html/rfc6455" target="_blank" rel="noopener">WebSocket Protocol</a></p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">HTTP/<span class="number">1.1</span> <span class="number">101</span> Switching Protocols</span><br><span class="line">Connection:Upgrade</span><br><span class="line">Upgrade: websocket</span><br><span class="line">Sec-WebSocket-Accept: Oy4NRAQ13jhfONC7bP8dTKb4PTU=</span><br></pre></td></tr></table></figure>
+<p>连接建立并协议升级后，双方的通信进入web-socket协议，它有以下特点：</p>
+<ol>
+<li>是真正的全双工方式，可以互相主动请求。</li>
+<li>在已经建立好的TCP连接中，交换数据不需要再发送和解析HTTP header。</li>
+<li>可以利用协议头的sec-websocket-key来进行连接复用，不同的URL可以复用同一个连接。</li>
+</ol>
+<h3 id="upgrade"><a href="#upgrade" class="headerlink" title="upgrade"></a>upgrade</h3><p>web-socket的服务端首先要完成协商协议升级的事情，且后续Handler的处理不用再经过httpServer的请求解析，然后路由的部分，仍然再已建立的httpconn上完成后续的信息交互。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">echo</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">    c, err := websocket.Upgrader&#123;&#125;.Upgrade(w, r, <span class="literal">nil</span>)</span><br><span class="line">    <span class="keyword">defer</span> c.Close()</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        mt, message, err := c.ReadMessage()</span><br><span class="line">        err = c.WriteMessage(mt, message)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>协议升级其实只是校验方法是否为GET，请求头是否有对应的升级标记。从http的Hijacker中获取原始netConn，并且回复server端的101协议升级信息。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(u *Upgrader)</span> <span class="title">Upgrade</span><span class="params">(w http.ResponseWriter, r *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">    responseHeader http.Header)</span> <span class="params">(*Conn, error)</span></span> &#123;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    challengeKey := r.Header.Get(<span class="string">"Sec-Websocket-Key"</span>)</span><br><span class="line">    h, ok := w.(http.Hijacker)</span><br><span class="line">    netConn, rw, err = h.Hijack()</span><br><span class="line">    br = rw.Reader</span><br><span class="line"></span><br><span class="line">    c := newConn(netConn, <span class="literal">true</span>, u.ReadBufferSize, u.WriteBufferSize)</span><br><span class="line">    c.subprotocol = subprotocol</span><br><span class="line"></span><br><span class="line">    p := c.writeBuf[:<span class="number">0</span>]</span><br><span class="line">    p = <span class="built_in">append</span>(p, <span class="string">"HTTP/1.1 101 Switching Protocols\r\nUpgrade: \</span></span><br><span class="line"><span class="string">      websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "</span>...)</span><br><span class="line">    p = <span class="built_in">append</span>(p, computeAcceptKey(challengeKey)...)</span><br><span class="line">    p = <span class="built_in">append</span>(p, <span class="string">"\r\n"</span>...)</span><br><span class="line">    <span class="keyword">if</span> c.subprotocol != <span class="string">""</span> &#123;</span><br><span class="line">        p = <span class="built_in">append</span>(p, <span class="string">"Sec-Websocket-Protocol: "</span>...)</span><br><span class="line">        p = <span class="built_in">append</span>(p, c.subprotocol...)</span><br><span class="line">        p = <span class="built_in">append</span>(p, <span class="string">"\r\n"</span>...)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Clear deadlines set by HTTP server.</span></span><br><span class="line">    netConn.SetDeadline(time.Time&#123;&#125;)</span><br><span class="line">    <span class="keyword">if</span> u.HandshakeTimeout &gt; <span class="number">0</span> &#123;</span><br><span class="line">        netConn.SetWriteDeadline(time.Now().Add(u.HandshakeTimeout))</span><br><span class="line">    &#125;</span><br><span class="line">  </span><br><span class="line">    <span class="keyword">if</span> _, err = netConn.Write(p); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        netConn.Close()</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> c, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="keepalive"><a href="#keepalive" class="headerlink" title="keepalive"></a>keepalive</h3><p>websocket的连接无法感知对方是否关闭了连接，所以协议层设计了Ping-Pang来做keepalive。每隔7s秒发一次PingMessage，收到PongMessage就更新lastResponseTime，如果超过15s都没有PongMessage的回应，则断开websocket连接。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dynHandler *DynamicConfigHandler)</span> <span class="title">startDynamicConfigHandler</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> dynHandler != <span class="literal">nil</span> &amp;&amp; dynHandler.wsDialer != <span class="literal">nil</span> &#123;</span><br><span class="line">        dynHandler.wsConnection, _, err = dynHandler.wsDialer.Dial(url, <span class="literal">nil</span>)</span><br><span class="line">        keepAlive(dynHandler.wsConnection, <span class="number">15</span>*time.Second)</span><br><span class="line">        <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">            <span class="keyword">for</span> &#123;</span><br><span class="line">                messageType, message, err := dynHandler.wsConnection.ReadMessage()</span><br><span class="line">                <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    <span class="keyword">break</span></span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">if</span> messageType == websocket.TextMessage &#123;</span><br><span class="line">                    dynHandler.EventHandler.OnReceive(message)</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> dynHandler.wsConnection.Close()</span><br><span class="line">        &#125;()</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">keepAlive</span><span class="params">(c *websocket.Conn, timeout time.Duration)</span></span> &#123;</span><br><span class="line">    lastResponse := time.Now()</span><br><span class="line">    c.SetPongHandler(<span class="function"><span class="keyword">func</span><span class="params">(msg <span class="keyword">string</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        lastResponse = time.Now()</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;)</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">for</span> &#123;</span><br><span class="line">            err := c.WriteMessage(websocket.PingMessage, []<span class="keyword">byte</span>(<span class="string">"keepalive"</span>))</span><br><span class="line">            <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            time.Sleep(timeout / <span class="number">2</span>)</span><br><span class="line">            <span class="keyword">if</span> time.Now().Sub(lastResponse) &gt; timeout &#123;</span><br><span class="line">                c.Close()</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="http2"><a href="#http2" class="headerlink" title="http2"></a>http2</h2><p>http2的writer实现了Pusher接口，通过push可以把消息发给http2conn内部维护的<code>wantStartPushCh</code>，在conn的serve过程中分发这个msg开始startPush。最终是发了pushPromiseFrame，具体的过程下次写http2实现的时候再说吧。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">http.HandleFunc(<span class="string">"/"</span>, <span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">  <span class="keyword">if</span> push, ok := w.(http.Pusher); ok &#123;</span><br><span class="line">    <span class="keyword">if</span> err := pusher.Push(<span class="string">"/app.js"</span>, <span class="literal">nil</span>); err != <span class="literal">nil</span> &#123;</span><br><span class="line">      log.Printf(<span class="string">"Failed to push: %v"</span>, err)</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;)</span><br></pre></td></tr></table></figure>
+<p><strong>这里只解释一个问题：为什么http2没有改变语义、方法、状态码和URI、以及首部字段，它也没有使用分块传输编码，它如何实现push和多路复用，改进了传输性能。</strong></p>
+<p>应用层和传输层之间增加了一个二进制分帧层。 </p>
+<p><img src="/2018/04/25/实现Watch的Server-Push与Client-Poll方式/frame.jpg" alt="frame"></p>
+<p>HTTP2将要传输的信息分割成更小的消息和帧，并对它们采用二进制格式的编码。原来的HTTP header和HTTP body都以Frame Payload存在。每个Frame的FrameHeader描述了这个帧的长度，类型等信息。</p>
+<ol>
+<li><strong>Length</strong>:  Frame Payload 的长度， Frame Header 的长度是 9 字节（Length + Type + Flags + R + Stream Identifier = 72 bit）。</li>
+<li><strong>Type</strong>: Frame Payload 存储的数据是属于 HTTP Header 还是 HTTP Body</li>
+<li><strong>Flags</strong>: 共 8 位， 每位都起标记作用。每种不同的 Frame Type 都有不同的 Frame Flags。例如发送最后一个 DATA 类型的 Frame 时，就会将 Flags 最后一位设置 1（<code>flags &amp;= 0x01</code>），表示 END_STREAM，说明这个 Frame 是流的最后一个数据包。</li>
+<li><strong>Stream Identifier</strong>: 流 ID，当客户端和服务端建立 TCP 链接时，就会先发送一个 Stream ID = 0 的流，用来做些初始化工作。之后客户端和服务端从 1 开始发送请求/响应。</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">+-----------------------------------------------+</span><br><span class="line">|                 Length (24)                   |</span><br><span class="line">+---------------+---------------+---------------+</span><br><span class="line">|   Type (8)    |   Flags (8)   |</span><br><span class="line">+-+-------------+---------------+-------------------+</span><br><span class="line">|R|                 Stream Identifier (31)          |</span><br><span class="line">+=+=================================================+</span><br><span class="line">|                   Frame Payload (0...)        ...</span><br><span class="line">+---------------------------------------------------+</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p><strong>理解</strong>：HTTP1.x客户端解析读取响应是根据响应头的Content-Len读取body体，然后返回。为了让它流式读取，server端要在头里告诉client 现在要变更编码方式为chunked，之后进行分块传输，直到server端发了大小为0的数据。</p>
+<p>HTTP2引入Frame了之后完全改变了原来的编解码方式，整个方式类似很多RPC协议。帧由二进制编码，帧头固定位置的字节描述body长度，就可以读取body体，直到flags遇到END_STREAM。这种方式天然支持服务端在stream上发送数据，不需要通知客户端做什么改变。</p>
+<p>其次streamID这个是用来做多路复用的，跟许多RPC协议里的msgID是一个意思。</p>
+</blockquote>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><a href="http://httpwg.org/specs/rfc7540.html" target="_blank" rel="noopener">http2 protocol</a></li>
+<li><a href="http://www.blogjava.net/yongboy/archive/2015/03/19/423611.aspx" target="_blank" rel="noopener">http2笔记之流和多路复用</a></li>
+<li><a href="https://feilengcui008.github.io/post/grpc-go%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" target="_blank" rel="noopener">grpc-go服务端源码分析</a></li>
+<li><a href="http://colobu.com/2017/04/06/dive-into-gRPC-streaming/" target="_blank" rel="noopener">grpc-streaming</a></li>
+</ul>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/HTTP/" rel="tag"># HTTP</a>
+          
+            <a href="/tags/watch/" rel="tag"># watch</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/03/27/记go-RPC的实现/" rel="next" title="记go-RPC的实现">
+                <i class="fa fa-chevron-left"></i> 记go-RPC的实现
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/05/21/容器网络和Kube-Proxy笔记整理/" rel="prev" title="容器网络和Kube-Proxy笔记整理">
+                容器网络和Kube-Proxy笔记整理 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/nino.jpg"
+                alt="nino" />
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">25</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/ninokop" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="http://weibo.com/u/1732126300" target="_blank" title="WeiBo">
+                    
+                      <i class="fa fa-fw fa-globe"></i>WeiBo</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#ServerPush-amp-ClientPull"><span class="nav-number">1.</span> <span class="nav-text">ServerPush &amp; ClientPull</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#long-polling"><span class="nav-number">2.</span> <span class="nav-text">long polling</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#client"><span class="nav-number">2.1.</span> <span class="nav-text">client</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#server"><span class="nav-number">2.2.</span> <span class="nav-text">server</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#streaming"><span class="nav-number">3.</span> <span class="nav-text">streaming</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#server-amp-serveWatch"><span class="nav-number">3.1.</span> <span class="nav-text">server &amp; serveWatch</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#registry-amp-storage"><span class="nav-number">3.2.</span> <span class="nav-text">registry &amp; storage</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#client-1"><span class="nav-number">3.3.</span> <span class="nav-text">client</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#web-socket"><span class="nav-number">4.</span> <span class="nav-text">web-socket</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#upgrade"><span class="nav-number">4.1.</span> <span class="nav-text">upgrade</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#keepalive"><span class="nav-number">4.2.</span> <span class="nav-text">keepalive</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#http2"><span class="nav-number">5.</span> <span class="nav-text">http2</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference"><span class="nav-number">6.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.3</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

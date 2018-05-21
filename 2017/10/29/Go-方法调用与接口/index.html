@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Golang," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="在比较C++和Go的时候，通常会说到Go不支持继承和多态，但通过组合和接口实现了类似的语言特性。总结一下Go不支持的原因：(1) 首先struct是值类型，赋值和传参都会复制全部内容。struct的内存布局跟C几乎一致，没有任何附加的object信息，比如指向虚函数表的指针。(2)其次Go不支持隐式的类型转换，因此用基类的指针指向子类会编译错误。  Go程序抽象的基本原则依赖于接口而不是实现，优先">
+<meta name="keywords" content="Golang">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Go 方法调用与接口">
+<meta property="og:url" content="http://yoursite.com/2017/10/29/Go-方法调用与接口/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="在比较C++和Go的时候，通常会说到Go不支持继承和多态，但通过组合和接口实现了类似的语言特性。总结一下Go不支持的原因：(1) 首先struct是值类型，赋值和传参都会复制全部内容。struct的内存布局跟C几乎一致，没有任何附加的object信息，比如指向虚函数表的指针。(2)其次Go不支持隐式的类型转换，因此用基类的指针指向子类会编译错误。  Go程序抽象的基本原则依赖于接口而不是实现，优先">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2017/10/29/Go-方法调用与接口/gdb.png">
+<meta property="og:image" content="http://yoursite.com/2017/10/29/Go-方法调用与接口/itab.png">
+<meta property="og:updated_time" content="2018-03-17T11:17:03.897Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Go 方法调用与接口">
+<meta name="twitter:description" content="在比较C++和Go的时候，通常会说到Go不支持继承和多态，但通过组合和接口实现了类似的语言特性。总结一下Go不支持的原因：(1) 首先struct是值类型，赋值和传参都会复制全部内容。struct的内存布局跟C几乎一致，没有任何附加的object信息，比如指向虚函数表的指针。(2)其次Go不支持隐式的类型转换，因此用基类的指针指向子类会编译错误。  Go程序抽象的基本原则依赖于接口而不是实现，优先">
+<meta name="twitter:image" content="http://yoursite.com/2017/10/29/Go-方法调用与接口/gdb.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2017/10/29/Go-方法调用与接口/"/>
+
+
+
+
+
+  <title>Go 方法调用与接口 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/10/29/Go-方法调用与接口/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Go 方法调用与接口</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2017-10-29T18:35:14+08:00">
+                2017-10-29
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Golang/" itemprop="url" rel="index">
+                    <span itemprop="name">Golang</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>在比较C++和Go的时候，通常会说到Go不支持继承和多态，但通过组合和接口实现了类似的语言特性。总结一下Go不支持的原因：(1) 首先struct是值类型，赋值和传参都会复制全部内容。struct的内存布局跟C几乎一致，没有任何附加的object信息，比如指向虚函数表的指针。(2)其次Go不支持隐式的类型转换，因此用基类的指针指向子类会编译错误。</p>
+<blockquote>
+<p><strong>Go程序抽象的基本原则</strong><font color="#1E90FF">依赖于接口而不是实现，优先使用组合而不是继承。</font></p>
+</blockquote>
+<h2 id="struct的方法调用"><a href="#struct的方法调用" class="headerlink" title="struct的方法调用"></a>struct的方法调用</h2><p>对象的方法调用相当于普通函数调用的语法糖。Value方法的调用<code>m.Value()</code>等价于<code>func Value(m M)</code> 即把<strong>对象实例m</strong>作为函数调用的第一个实参压栈，这时m称为<strong>receiver</strong>。通过实例或实例的指针其实都可以调用所有方法，区别是复制给函数的receiver不同。</p>
+<blockquote>
+<p>通过实例m调用Value时，以及通过指针p调用Value时，receiver是m和*p，即复制的是m实例本身。因此receiver是m实例的副本，他们地址不同。通过实例m调用Pointer时，以及通过指针p调用Pointer时，复制的是都是&amp;m和p，即复制的都是指向m的指针，返回的都是m实例的地址。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> M <span class="keyword">struct</span> &#123;</span><br><span class="line">    a <span class="keyword">int</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m M)</span> <span class="title">Value</span><span class="params">()</span> <span class="title">string</span></span> &#123;<span class="keyword">return</span> fmt.Sprintf(<span class="string">"Value: %p\n"</span>, &amp;m)&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *M)</span> <span class="title">Pointer</span><span class="params">()</span> <span class="title">string</span></span> &#123;<span class="keyword">return</span> fmt.Sprintf(<span class="string">"Pointer: %p\n"</span>, m)&#125;</span><br><span class="line"><span class="keyword">var</span> m M</span><br><span class="line">p := &amp;m      <span class="comment">// p is address of m 0x2101ef018</span></span><br><span class="line">m.Value()    <span class="comment">// value(m) return 0x2101ef028</span></span><br><span class="line">m.Pointer()  <span class="comment">// value(&amp;m) return 0x2101ef018</span></span><br><span class="line">p.Value()    <span class="comment">// value(*p) return 0x2101ef030</span></span><br><span class="line">p.Pointer()  <span class="comment">// value(p) return 0x2101ef018</span></span><br></pre></td></tr></table></figure>
+<font color="#1E90FF">如果想在方法中修改对象的值只能用pointer receiver，对象较大时避免拷贝也要用pointer receiver。</font>
+
+<h3 id="方法集理解"><a href="#方法集理解" class="headerlink" title="方法集理解"></a>方法集理解</h3><p>上面例子中通过实例m和p都可以调用全部方法，由编译器自动转换。在很多go的语法书里有方法集的概念。类型T方法集包含全部receiver T方法，类型*T包含全部receiver T和*T的方法。这句话一直不理解，既然通过实例和指针可以访问T和*T的所有方法，那方法集的意义是什么。</p>
+<blockquote>
+<p>定义在M类型的方法除了通过实例和实例指针访问，还可以通过<code>method expression</code>的方式调用。这时Pointer对M类型就是不可见的。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">(M).Value(m)       <span class="comment">// valid</span></span><br><span class="line">(M).Pointer(m)     <span class="comment">// invalid M does not have Pointer</span></span><br><span class="line">(*M).Value(&amp;m)     <span class="comment">// valid</span></span><br><span class="line">(*M).Pointer(&amp;m)   <span class="comment">// valid</span></span><br></pre></td></tr></table></figure>
+<p>再解释一下method value的receiver复制的问题。这里u.Test返回的类型类似于闭包返回的FuncVal类型，也就是<code>FuncVal{method_address, receiver_copy}</code>对象。因此下面例子中mValue中已经包含了实例u的副本。当然如果Test方法的receiver是*User，结果将不一样。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">u := User&#123;<span class="number">1</span>&#125;     <span class="comment">// User&#123;Id int&#125;</span></span><br><span class="line">mValue := u.Test <span class="comment">// func(s User) Test() &#123;fmt.Println(s.Id)&#125;</span></span><br><span class="line">u.Id = <span class="number">2</span></span><br><span class="line">u.Test()  <span class="comment">// output: 2</span></span><br><span class="line">mValue()  <span class="comment">// output: 1</span></span><br></pre></td></tr></table></figure>
+<h3 id="匿名字段与组合"><a href="#匿名字段与组合" class="headerlink" title="匿名字段与组合"></a>匿名字段与组合</h3><p>Go没有继承，但是有结构体嵌入。当一个类型T被匿名的嵌入另一类型M时，T的方法也就会拷贝到M的方法表当中。这时根据方法集的规则，如果M包含的是*T，则M包含T与*T上所有的方法。</p>
+<blockquote>
+<font color="#1E90FF">通过匿名字段，Go实现了类似继承的复用能力，并且可以在M上定义相同的方法名实现<strong>override</strong>。</font>
+</blockquote>
+<h2 id="interface接口实现"><a href="#interface接口实现" class="headerlink" title="interface接口实现"></a>interface接口实现</h2><p>Go的interface是一种内置类型，属于动态风格的<strong>duck-typing</strong>类型。接口作为方法签名的集合，任何类型的方法集中只要拥有与之对应的全部方法，就表示它实现了该接口。</p>
+<h3 id="interface底层结构"><a href="#interface底层结构" class="headerlink" title="interface底层结构"></a>interface底层结构</h3><p>interface是一个结构体，包含两个成员。根据interface是否包含方法，底层又分为两个结构体。eface主要是保存了类型信息，以后总结反射时具体讲，这里先总结带方法的iface。结构体定义在<code>runtime2.go</code>显然iface由两部分组成，data域保存元数据，tab描述接口。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> eface <span class="keyword">struct</span> &#123;</span><br><span class="line">    _type *_type</span><br><span class="line">    data unsafe.Pointer</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> iface <span class="keyword">struct</span> &#123;</span><br><span class="line">    tab *itab</span><br><span class="line">    data unsafe.Pointer</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> itab <span class="keyword">struct</span> &#123;</span><br><span class="line">  inter *interfacetype <span class="comment">// 保存该接口的方法签名</span></span><br><span class="line">  _type *_type <span class="comment">// 保存动态类型的type类型信息</span></span><br><span class="line">  link *itab <span class="comment">// 可能有嵌套的itab</span></span><br><span class="line">  bad <span class="keyword">int32</span></span><br><span class="line">  unused <span class="keyword">int32</span></span><br><span class="line">  fun [<span class="number">1</span>]<span class="keyword">uintptr</span>  <span class="comment">// 保存动态类型对应的实现</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> interfacetype <span class="keyword">struct</span> &#123;</span><br><span class="line">  <span class="keyword">type</span> _type</span><br><span class="line">  mhdr []imethod</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>为了理解iface的数据结构，找到一个<a href="https://juejin.im/entry/59a6284df265da24921b3e36" target="_blank" rel="noopener">唐老鸭接口</a>接口的例子，通过gdb看看iface的数据到底是什么。首先<code>dd=&amp;DonalDuck{}</code>这个类型的方法集包括<code>MakeFun Walking Speaking</code> 它实现了<strong>Duck</strong>和<strong>Actor</strong>两个接口。</p>
+<blockquote>
+<p>这时如果dd=DonalDuck{} 则没有实现Duck和Actor接口</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Duck <span class="keyword">interface</span> &#123;</span><br><span class="line">	GaGaSpeaking()</span><br><span class="line">	OfficialWalking()</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> Actor <span class="keyword">interface</span> &#123;</span><br><span class="line">	MakeFun()</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> DonaldDuck <span class="keyword">struct</span> &#123;</span><br><span class="line">	height <span class="keyword">uint</span></span><br><span class="line">	name   <span class="keyword">string</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dd *DonaldDuck)</span> <span class="title">GaGaSpeaking</span><span class="params">()</span></span> &#123; fmt.Println(<span class="string">"DonaldDuck gaga"</span>) &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dd *DonaldDuck)</span> <span class="title">OfficialWalking</span><span class="params">()</span></span> &#123; fmt.Println(<span class="string">"DonaldDuck walk"</span>) &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dd *DonaldDuck)</span> <span class="title">MakeFun</span><span class="params">()</span></span> &#123; fmt.Println(<span class="string">"DonaldDuck make fun"</span>) &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	dd := &amp;DonaldDuck&#123;<span class="number">10</span>, <span class="string">"tang lao ya"</span>&#125;</span><br><span class="line">	<span class="keyword">var</span> duck Duck = dd</span><br><span class="line">	<span class="keyword">var</span> actor Actor = dd</span><br><span class="line">	duck.GaGaSpeaking()</span><br><span class="line">	actor.MakeFun()</span><br><span class="line">	dd.OfficialWalking()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看出来当dd赋值给接口Duck后，接口duck的<strong>data域</strong>保存的地址就是dd对象指向的地址。<strong>tab域</strong>的inter字段里保存了实现这个接口的两个<strong>方法声明</strong>，其中name保存了方法的名字。<strong>tab域</strong>的func指针指向了具体实现，即这个符号对应的代码段<code>.text</code>地址。</p>
+<p><img src="/2017/10/29/Go-方法调用与接口/gdb.png" style="zoom:90%"></p>
+<blockquote>
+<p><font color="#1E90FF">具体T类型到Iface的转换涉及到3个内容的复制</font> (1) iface的tab域的func字段保存T类型的方法集，即对tab域inter声明的方法的实现。(2) iface的data域指针指向用于赋值的对象的副本。(3) iface的tab域的_type字段保存T类型的_type。</p>
+</blockquote>
+<p><img src="/2017/10/29/Go-方法调用与接口/itab.png" style="zoom:40%"></p>
+<h3 id="编译期检测"><a href="#编译期检测" class="headerlink" title="编译期检测"></a>编译期检测</h3><p>当T类型没有实现I接口中所有方法时，从T到I的赋值将抛出<code>TypeAssertionError</code>编译错误。检查的方法在函数additab当中，即查看T类型的<strong>_type</strong>方法表<strong>uncommentType</strong>是否包含了I接口<strong>interfacetype</strong>中所有的<strong>imethod</strong>，同时将T类型对方法的实现拷贝到tab的<strong>func</strong>指向的表中。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> _type <span class="keyword">struct</span> &#123;</span><br><span class="line">	size       <span class="keyword">uintptr</span></span><br><span class="line">	ptrdata    <span class="keyword">uintptr</span> <span class="comment">// size of memory prefix holding all pointers</span></span><br><span class="line">	hash       <span class="keyword">uint32</span></span><br><span class="line">	_unused    <span class="keyword">uint8</span></span><br><span class="line">	align      <span class="keyword">uint8</span></span><br><span class="line">	fieldalign <span class="keyword">uint8</span></span><br><span class="line">	kind       <span class="keyword">uint8</span></span><br><span class="line">	alg        *typeAlg</span><br><span class="line">	gcdata  *<span class="keyword">byte</span></span><br><span class="line">	_string *<span class="keyword">string</span></span><br><span class="line">	x       *uncommontype</span><br><span class="line">	ptrto   *_type</span><br><span class="line">	zero    *<span class="keyword">byte</span> <span class="comment">// ptr to the zero value for this type</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> uncommontype <span class="keyword">struct</span> &#123;</span><br><span class="line">	name    *<span class="keyword">string</span></span><br><span class="line">	pkgpath *<span class="keyword">string</span></span><br><span class="line">	mhdr    []method</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="三张方法表的区别"><a href="#三张方法表的区别" class="headerlink" title="三张方法表的区别"></a>三张方法表的区别</h3><p>1) 每个<strong>具体T类型type</strong>结构对应的方法表是<code>uncommontype</code>，类型的方法集都在这里。reflect包中的Method和MethodByName方法都是通过查询这张表实现的。表中每一项都是<code>method</code>。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">type method struct &#123;</span><br><span class="line">	name    *string</span><br><span class="line">	pkgpath *string</span><br><span class="line">	mtyp    *_type</span><br><span class="line">	typ     *_type</span><br><span class="line">	ifn     unsafe.Pointer</span><br><span class="line">	tfn     unsafe.Pointer</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>2) itab的<strong>interfacetype</strong>域是一张方法表，它声明了接口所有的方法，每一项都是<code>imethod</code>，可见它<code>没有实现只有声明</code>。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">type imethod struct &#123;</span><br><span class="line">  name *string</span><br><span class="line">  pkgpath *string</span><br><span class="line">  _type *type</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>3) itab的<strong>func</strong>域也是一张方法表，表中每一项是一个函数指针，也就是<code>只有实现没有声明</code>。即赋值的时候只是把具体类型的实现，即函数指针拷贝给了itab的func域。</p>
+<h3 id="运行时-ConvT2I"><a href="#运行时-ConvT2I" class="headerlink" title="运行时 ConvT2I"></a>运行时 ConvT2I</h3><p><a href="https://blog.altoros.com/golang-internals-part-2-diving-into-the-go-compiler.html" target="_blank" rel="noopener">Go-internals</a>分析了go编译器在编译期生成的语法树节点。在T2I的转换时，通过<code>getitab</code>产生了中间状态<code>itab</code>。并且调用<code>convT2I</code>完成了运行时数据<strong>data域</strong>的内存拷贝，以及中间状态itab到<strong>tab域</strong>的赋值。</p>
+<p>可以看到<code>getitab</code>完成了T类型的方法表的实现地址到tab的fnc[0]的赋值。完成<code>getiab</code>需要T类型的_type信息，以及I接口类型的interfacetype方法表，这些都是编译期提供的。因此<font color="#1E90FF">接口的动态性和反射的实现都是以编译期为运行时提供的类型信息为基础的。</font></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">getitab</span><span class="params">(inter *interfacetype, typ *_type, canfail <span class="keyword">bool</span>)</span> *<span class="title">itab</span></span> &#123;</span><br><span class="line">..</span><br><span class="line">  m = (*itab)(persistentalloc(unsafe.Sizeof(itab&#123;&#125;)+</span><br><span class="line">      <span class="keyword">uintptr</span>(<span class="built_in">len</span>(inter.mhdr)<span class="number">-1</span>)*ptrSize, <span class="number">0</span>, &amp;memstats.other_sys))</span><br><span class="line">  m.inter = inter</span><br><span class="line">  m._type = typ</span><br><span class="line">...</span><br><span class="line">  <span class="keyword">for</span> k := <span class="number">0</span>; k &lt; ni; k++ &#123;</span><br><span class="line">    <span class="keyword">for</span> ; j &lt; nt; j++ &#123; </span><br><span class="line">    *(*unsafe.Pointer)(add(unsafe.Pointer(&amp;m.fun[<span class="number">0</span>]), <span class="keyword">uintptr</span>(k)*ptrSize)) = t.ifn</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">goto</span> nextimethod</span><br><span class="line">   &#125;</span><br><span class="line">  <span class="comment">// didn't find method</span></span><br><span class="line">  <span class="keyword">if</span> !canfail &#123;</span><br><span class="line">    <span class="built_in">panic</span>(&amp;TypeAssertionError&#123;<span class="string">""</span>, *typ._string, *inter.typ._string, *iname&#125;)</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> m</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>最后的<code>convT2I</code>存在数据的内存拷贝，可见<strong>data域</strong>是T类型对象的一个拷贝。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">convT2I</span><span class="params">(t *_type, inter *interfacetype, cache **itab, </span></span></span><br><span class="line"><span class="function"><span class="params">elem unsafe.Pointer, x unsafe.Pointer)</span> <span class="params">(i fInterface)</span></span> &#123;</span><br><span class="line">  tab := (*itab)(atomicloadp(unsafe.Pointer(cache)))</span><br><span class="line">...</span><br><span class="line">  <span class="keyword">if</span> x == <span class="literal">nil</span> &#123;</span><br><span class="line">    x = newobject(t)</span><br><span class="line">  &#125;</span><br><span class="line">  typedmemmove(t, x, elem)</span><br><span class="line">  pi.tab = tab</span><br><span class="line">  pi.data = x</span><br><span class="line">  <span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>总结</strong> 将对象赋值给接口时，编译期检查对象是否实现了接口所有的方法。运行时将对象的数据、类型、实现拷贝到iface接口当中。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Golang/" rel="tag"># Golang</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/10/26/Go-函数调用惯例/" rel="next" title="Go 函数调用惯例">
+                <i class="fa fa-chevron-left"></i> Go 函数调用惯例
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/10/30/Go-反射与interface拾遗/" rel="prev" title="Go 反射与interface拾遗">
+                Go 反射与interface拾遗 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/nino.jpg"
+                alt="nino" />
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">25</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/ninokop" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="http://weibo.com/u/1732126300" target="_blank" title="WeiBo">
+                    
+                      <i class="fa fa-fw fa-globe"></i>WeiBo</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#struct的方法调用"><span class="nav-number">1.</span> <span class="nav-text">struct的方法调用</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#方法集理解"><span class="nav-number">1.1.</span> <span class="nav-text">方法集理解</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#匿名字段与组合"><span class="nav-number">1.2.</span> <span class="nav-text">匿名字段与组合</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#interface接口实现"><span class="nav-number">2.</span> <span class="nav-text">interface接口实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#interface底层结构"><span class="nav-number">2.1.</span> <span class="nav-text">interface底层结构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#编译期检测"><span class="nav-number">2.2.</span> <span class="nav-text">编译期检测</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#三张方法表的区别"><span class="nav-number">2.3.</span> <span class="nav-text">三张方法表的区别</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#运行时-ConvT2I"><span class="nav-number">2.4.</span> <span class="nav-text">运行时 ConvT2I</span></a></li></ol></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.3</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

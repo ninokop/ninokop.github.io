@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Golang,network,HTTP," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="HTTP协议HTTP协议是规范服务端和客户端请求应答标准的应用层协议，即它是一个应用层的请求响应协议。客户端的请求和服务端响应共同构成了一次HTTP事务，他们之间的通信通过HTTP报文进行。HTTP1.1的报文是纯文本的，协议规定了报文的格式，报文格式都是起始行+Header+Body的格式，只是请求起始行包含方法+URI，响应起始行是状态码和状态消息。  TCP连接管理在TCP/IP协议族里，H">
+<meta name="keywords" content="Golang,network,HTTP">
+<meta property="og:type" content="article">
+<meta property="og:title" content="HTTP协议与Go的实现">
+<meta property="og:url" content="http://yoursite.com/2018/02/19/HTTP协议与Go的实现/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="HTTP协议HTTP协议是规范服务端和客户端请求应答标准的应用层协议，即它是一个应用层的请求响应协议。客户端的请求和服务端响应共同构成了一次HTTP事务，他们之间的通信通过HTTP报文进行。HTTP1.1的报文是纯文本的，协议规定了报文的格式，报文格式都是起始行+Header+Body的格式，只是请求起始行包含方法+URI，响应起始行是状态码和状态消息。  TCP连接管理在TCP/IP协议族里，H">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2018/02/19/HTTP协议与Go的实现/req_resp.png">
+<meta property="og:image" content="http://yoursite.com/2018/02/19/HTTP协议与Go的实现/frame.jpg">
+<meta property="og:image" content="http://yoursite.com/2018/02/19/HTTP协议与Go的实现/listen_serve.png">
+<meta property="og:updated_time" content="2018-04-27T01:39:54.920Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="HTTP协议与Go的实现">
+<meta name="twitter:description" content="HTTP协议HTTP协议是规范服务端和客户端请求应答标准的应用层协议，即它是一个应用层的请求响应协议。客户端的请求和服务端响应共同构成了一次HTTP事务，他们之间的通信通过HTTP报文进行。HTTP1.1的报文是纯文本的，协议规定了报文的格式，报文格式都是起始行+Header+Body的格式，只是请求起始行包含方法+URI，响应起始行是状态码和状态消息。  TCP连接管理在TCP/IP协议族里，H">
+<meta name="twitter:image" content="http://yoursite.com/2018/02/19/HTTP协议与Go的实现/req_resp.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2018/02/19/HTTP协议与Go的实现/"/>
+
+
+
+
+
+  <title>HTTP协议与Go的实现 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/02/19/HTTP协议与Go的实现/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">HTTP协议与Go的实现</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2018-02-19T10:12:26+08:00">
+                2018-02-19
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/network/" itemprop="url" rel="index">
+                    <span itemprop="name">network</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h2 id="HTTP协议"><a href="#HTTP协议" class="headerlink" title="HTTP协议"></a>HTTP协议</h2><p>HTTP协议是规范服务端和客户端请求应答标准的应用层协议，即它是一个<strong>应用层的请求响应协议</strong>。客户端的请求和服务端响应共同构成了一次HTTP事务，他们之间的通信通过HTTP报文进行。HTTP1.1的报文是<strong>纯文本</strong>的，协议规定了报文的格式，报文格式都是起始行+Header+Body的格式，只是请求起始行包含方法+URI，响应起始行是状态码和状态消息。</p>
+<p><img src="/2018/02/19/HTTP协议与Go的实现/req_resp.png" alt=""></p>
+<h3 id="TCP连接管理"><a href="#TCP连接管理" class="headerlink" title="TCP连接管理"></a>TCP连接管理</h3><p>在TCP/IP协议族里，HTTP协议是基于TCP这个传输层协议的。即虽然<strong>HTTP本身无状态</strong>，TCP为他提供了可靠面向连接的传输，HTTP发送请求需要先建立底层的TCP连接。本节总结跟HTTP性能相关的TCP时延。</p>
+<ul>
+<li><strong>TCP建立连接时延</strong> client发起HTTP请求，可能会在TCP建立连接的过程消耗50%以上的时间，因此http的client侧应该重用现有的连接来减小影响。</li>
+<li><strong>延迟确认算法引起的时延</strong></li>
+<li><strong>TCP慢启动</strong> 由于拥塞控制，TCP新连接的传输速度是有限制的，只有当它交换一定数量数据后拥塞窗口才慢慢打开。所以HTTP重用现有连接很重要。</li>
+<li><strong>Nagle算法</strong> 导致小HTTP报文无法填满一个分组，可能会因为等待永远不会到来的额外数据而产生时延。通过配置TCP参数TCP_NODELAY来禁用Nagle算法，提高性能。但要保证会向TCP写入大块的数据，而不是一堆小分组。</li>
+<li><strong>TIME_WAIT累积和端口耗尽</strong> </li>
+</ul>
+<h3 id="HTTP2的区别"><a href="#HTTP2的区别" class="headerlink" title="HTTP2的区别"></a>HTTP2的区别</h3><p>首先HTTP2 的引入时为了解决HTTP1.X的一些问题或缺陷，它虽然保留了HTTP Header等协议格式，但在tcp层上通过binary帧层把数据做了进一步封装，最终传输在连接上的是二进制数据。</p>
+<p><img src="/2018/02/19/HTTP协议与Go的实现/frame.jpg" alt=""></p>
+<ol>
+<li>HTTP1.X时代Server端实现主动推送，需要引入类似long poll，web socket等折中方式。HTTP2的编码格式和传输协议天然支持Server Push，不需要Chunked编码等等。</li>
+<li>head-Of-Blocking问题：不支持真正的基于一个连接的并行多会话。HTTP1.X在同一个TCPconn上Transport同时只有一个roundTrip在运行，并发的请求时通过另外创建连接以及连接复用来实现的。HTTP2支持多路复用，通过streamID实现在同一个连接上处理不同stream的消息，消息间通过id区分。非常自然的实现了TCP的单连接。</li>
+<li>协议头部的数据冗余，HTTP2支持Hpack的头部压缩算法。</li>
+<li>引入了流控以及请求优先级的概念。</li>
+</ol>
+<h3 id="HTTPS引入"><a href="#HTTPS引入" class="headerlink" title="HTTPS引入"></a>HTTPS引入</h3><p>HTTPS就是HTTP on SSL/TLS，它的引入本身是为了应对明文传输场景下的三个风险：窃听风险、篡改风险、冒充风险。它通过<strong>信息加密传输</strong>让第三方无法窃听，提供<strong>校验机制</strong>让篡改可以被发现，配备<strong>身份证书</strong>防止身份被冒充。</p>
+<blockquote>
+<p>加密基本原理就是客户端用公钥加密，服务端用自己的私钥解密。但是这种不对称加密的效率很低，所以通常是为每次对话双方协商生成一个session key对话密钥，用它来对称加密信息。公钥只用于加密对话密钥就行了。这个sessionkey在缓存，不是每次建立连接都需handshake。在这个handshake过程中通过散列值校验数据完整性，同时双方都提供证书让对方验证身份。</p>
+</blockquote>
+<p>所以在TLS需要四次握手：</p>
+<ol>
+<li>客户端clientHello说明客户端支持的TLS版本、加密方法、压缩方法、客户端生成的随机数。</li>
+<li>服务端serverHello回应TLS版本、确认使用的加密方式、提供服务端随机数、服务端证书。这个证书包含公钥、服务端证书颁发者的数字签名。签名是用私钥加密的，所以客户端使用公钥若能解密，则完成了服务端身份验证。</li>
+<li>客户端生成一个加密的随机数pre-master key，编码改变通知，客户端握手结束通知，同时发送所有内容的hash值，用来给服务端校验。</li>
+<li>服务端通过三个随机数生成对话密钥，然后发编码变更通知和hash校验值。之后双方进入加密通信阶段。</li>
+</ol>
+<h2 id="go-http-server"><a href="#go-http-server" class="headerlink" title="go-http-server"></a>go-http-server</h2><p>以下是go写的最简单的HTTP server实例。它将TCP连接建立和分发的过程封装在了<code>http.ListenAndServe</code>当中，本节以此为开头记录http包的实现。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">sayHello</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">    log.Print(<span class="string">"req [%v]"</span>, *r)</span><br><span class="line">    fmt.Fprintln(w, <span class="string">"hello world"</span>)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    http.HandleFunc(<span class="string">"/"</span>, sayHello)</span><br><span class="line">    err := http.ListenAndServe(<span class="string">":8080"</span>, <span class="literal">nil</span>)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Fatal(<span class="string">"ListenAndServe error"</span>, err)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="listen-amp-serve"><a href="#listen-amp-serve" class="headerlink" title="listen &amp; serve"></a>listen &amp; serve</h3><p><code>http.ListenAndServe</code>通过net.Listen建立tcpListener，服务端可以进入accept循环，只要有listenFD上有accept新的TCPconn，<strong>每个TCPconn会通过newConn封装为一个server侧的httpConn，并通过new goroutine分发这次httpConn的相关处理。</strong>看起来go server是同步阻塞的方式，相关原理可参考我之前写的<a href="https://ninokop.github.io/2018/03/18/IO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E4%B8%8EGo%E7%BD%91%E7%BB%9C%E5%BA%93%E7%9A%84%E5%AE%9E%E7%8E%B0/" target="_blank" rel="noopener">IO多路复用与Go网络库的实现</a>。最外层的过程如图所示，下图转自<a href="">go-web编程</a>。</p>
+<p><img src="/2018/02/19/HTTP协议与Go的实现/listen_serve.png" alt=""></p>
+<blockquote>
+<p>默认accept的rw设置了keepalive，时间默认为3分钟。</p>
+</blockquote>
+<h3 id="conn"><a href="#conn" class="headerlink" title="conn"></a>conn</h3><p>server侧的连接conn是在net.Conn上的一层封装，它完成了HTTP协议解析req请求，处理请求，返回response的过程。下面是conn的数据结构。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> conn <span class="keyword">struct</span> &#123;</span><br><span class="line">    remoteAddr <span class="keyword">string</span>               <span class="comment">// network address of remote side</span></span><br><span class="line">    server     *Server              <span class="comment">// the Server on which the connection arrived</span></span><br><span class="line">    rwc        net.Conn             <span class="comment">// i/o connection</span></span><br><span class="line">    w          io.Writer            </span><br><span class="line">    werr       error                <span class="comment">// any errors writing to w</span></span><br><span class="line">    sr         liveSwitchReader     </span><br><span class="line">    lr         *io.LimitedReader    <span class="comment">// io.LimitReader(sr)</span></span><br><span class="line">    buf        *bufio.ReadWriter    </span><br><span class="line">    tlsState   *tls.ConnectionState <span class="comment">// or nil when not using TLS</span></span><br><span class="line">    lastMethod <span class="keyword">string</span>               <span class="comment">// method of previous request, or ""</span></span><br><span class="line"></span><br><span class="line">    mu           sync.Mutex <span class="comment">// guards the following</span></span><br><span class="line">    clientGone   <span class="keyword">bool</span>       <span class="comment">// if client has disconnected mid-request</span></span><br><span class="line">    closeNotifyc <span class="keyword">chan</span> <span class="keyword">bool</span>  <span class="comment">// made lazily</span></span><br><span class="line">    hijackedv    <span class="keyword">bool</span>       <span class="comment">// connection has been hijacked by handler</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>节选<code>conn.serve()</code>的一段，<code>conn</code>处理请求的基本过程如下。其中<code>readRequest</code>从读<code>conn.buf</code>按照HTTP协议解析请求，然后将请求丢给对应的<code>Handler</code>处理。读取req的过程是从<code>bufio</code>到<code>limitReader</code>，再到<code>liveSwitchReader</code>，最后到<code>net.Conn</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *conn)</span> <span class="title">serve</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="comment">// set deadline and deal with tlsconn handshake</span></span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        w, err := c.readRequest()</span><br><span class="line">        req := w.req</span><br><span class="line">        serverHandler&#123;c.server&#125;.ServeHTTP(w, w.req)</span><br><span class="line">        w.finishRequest()</span><br><span class="line">        c.setState(c.rwc, StateIdle)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="server-mux"><a href="#server-mux" class="headerlink" title="server mux"></a>server mux</h3><p>Server包含一个重要成员，就是Handler，它是一个接口，描述如何处理req和response。如果server中没有初始化handler，将调用http默认的路由器<code>DefaultServeMux</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Handler <span class="keyword">interface</span> &#123;</span><br><span class="line">    ServeHTTP(ResponseWriter, *Request)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>service mux的数据结构如下，其中m存了mux的pattern对应的handler。这里的m是通过<code>http.HandleFunc</code>注册到默认路由器中的。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ServeMux <span class="keyword">struct</span> &#123;</span><br><span class="line">    mu    sync.RWMutex</span><br><span class="line">    m     <span class="keyword">map</span>[<span class="keyword">string</span>]muxEntry</span><br><span class="line">    hosts <span class="keyword">bool</span> <span class="comment">// whether any patterns contain hostnames</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> muxEntry <span class="keyword">struct</span> &#123;</span><br><span class="line">    explicit <span class="keyword">bool</span></span><br><span class="line">    h        Handler</span><br><span class="line">    pattern  <span class="keyword">string</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>截取service mux实现路由选择的过程，其实<code>Handler</code>就是对比<code>r.Host + r.URL.Path</code>和m中的pattern，匹配到muxEntry的Handler，最后调用handler的ServeHTTP处理。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(mux *ServeMux)</span> <span class="title">ServeHTTP</span><span class="params">(w ResponseWriter, r *Request)</span></span> &#123;</span><br><span class="line">    h, _ := mux.Handler(r)</span><br><span class="line">    h.ServeHTTP(w, r)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="go-http-client"><a href="#go-http-client" class="headerlink" title="go-http-client"></a>go-http-client</h2><p>由于TCP建立的消耗和时延，以及拥塞控制等原因，希望对TCP连接重用，而不是HTTP事务完成后close掉。在HTTP1.0时期，server端显示的在response头部中加入 Connection: Keep-alive来告诉client侧，连接不close。而HTTP1.1后默认连接都是持久连接。</p>
+<blockquote>
+<p>tcp的keepalive是用来侦测双方都健在的机制，若长时间不在则close连接。http的keepalive是为了让tcpconn生命周期更长，以便重用已有的tcpconn，提高通信性能。</p>
+</blockquote>
+<h3 id="client"><a href="#client" class="headerlink" title="client"></a>client</h3><p>client的数据结构包括Transport，用来做一次HTTP的RoundTrip。CheckRedirect处理重定向策略。Jar处理cookie。Timeout是请求过期时间。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Client <span class="keyword">struct</span> &#123;</span><br><span class="line">    Transport RoundTripper</span><br><span class="line">    CheckRedirect <span class="function"><span class="keyword">func</span><span class="params">(req *Request, via []*Request)</span> <span class="title">error</span></span></span><br><span class="line"><span class="function">    <span class="title">Jar</span> <span class="title">CookieJar</span></span></span><br><span class="line"><span class="function">    <span class="title">Timeout</span> <span class="title">time</span>.<span class="title">Duration</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>client.send精简下来就是用Transport完成了一次HTTP事务。通信细节都封装在了transport里。本节主要记录http包的<code>DefaultTransport</code>的实现。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">send</span><span class="params">(req *Request, t RoundTripper)</span> <span class="params">(resp *Response, err error)</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> t.RoundTrip(req)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> RoundTripper <span class="keyword">interface</span> &#123;</span><br><span class="line">    RoundTrip(*Request) (*Response, error)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="transport"><a href="#transport" class="headerlink" title="transport"></a>transport</h3><p>以下数据结构省略了TLS和代理相关内容。Transport结构体包含了两个重要的map用来存持久连接<code>persistConn</code>，<code>connectMethodKey</code>代表协议和地址，也就是对每个server端的每种协议都有persistConn的映射。<code>MaxIdleConnsPerHost</code>配置为每个Host的最大空闲连接数。<code>Dial</code>方法可以看成对connect这个socket调用的封装。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Transport <span class="keyword">struct</span> &#123;</span><br><span class="line">    idleMu     sync.Mutex</span><br><span class="line">    wantIdle   <span class="keyword">bool</span> <span class="comment">// user has requested to close all idle conns</span></span><br><span class="line">    idleConn   <span class="keyword">map</span>[connectMethodKey][]*persistConn</span><br><span class="line">    idleConnCh <span class="keyword">map</span>[connectMethodKey]<span class="keyword">chan</span> *persistConn</span><br><span class="line"></span><br><span class="line">    reqMu       sync.Mutex</span><br><span class="line">    reqCanceler <span class="keyword">map</span>[*Request]<span class="function"><span class="keyword">func</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">    <span class="title">altMu</span>    <span class="title">sync</span>.<span class="title">RWMutex</span></span></span><br><span class="line"><span class="function">    <span class="title">altProto</span> <span class="title">map</span>[<span class="title">string</span>]<span class="title">RoundTripper</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">    <span class="title">Dial</span> <span class="title">func</span><span class="params">(network, addr <span class="keyword">string</span>)</span> <span class="params">(net.Conn, error)</span></span></span><br><span class="line"><span class="function">    <span class="title">DisableKeepAlives</span> <span class="title">bool</span></span></span><br><span class="line"><span class="function">    <span class="title">MaxIdleConnsPerHost</span> <span class="title">int</span></span></span><br><span class="line"><span class="function">    <span class="title">ResponseHeaderTimeout</span> <span class="title">time</span>.<span class="title">Duration</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>transport从Req获取method+host，然后从连接池获取<code>persistconn</code>，然后开始这次<code>roundTrip</code>。所有的读写过程和维护连接池都在这里做的。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *Transport)</span> <span class="title">RoundTrip</span><span class="params">(req *Request)</span> <span class="params">(resp *Response, err error)</span></span> &#123;</span><br><span class="line">    <span class="comment">// check req ...</span></span><br><span class="line">    treq := &amp;transportRequest&#123;Request: req&#125;</span><br><span class="line">    cm, err := t.connectMethodForRequest(treq)</span><br><span class="line">    pconn, err := t.getConn(req, cm)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        t.setReqCanceler(req, <span class="literal">nil</span>)</span><br><span class="line">        req.closeBody()</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> pconn.roundTrip(treq)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="idleConn"><a href="#idleConn" class="headerlink" title="idleConn"></a>idleConn</h3><p>getconn的来源有三个，除了idleConn连接池，还有一个idleConnCh维护了ch，这个ch在getConn时发现没有可用空闲连接是就创建</p>
+<ol>
+<li>idleConn缓存了与某个scheme+addr的空闲连接，getIdleConn从缓存中获取</li>
+<li>若idle缓存中没有，则开始dialconn，即通过net.Dial新建TCP连接</li>
+<li>dialConn需要时间，若这期间<code>getIdleConnCh</code>获取到别的已使用完回收的idleConn，则复用这个刚回收的conn</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *Transport)</span> <span class="title">getConn</span><span class="params">(req *Request, cm connectMethod)</span> <span class="params">(*persistConn, error)</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> pc := t.getIdleConn(cm); pc != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> pc, <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">type</span> dialRes <span class="keyword">struct</span> &#123;</span><br><span class="line">        pc  *persistConn</span><br><span class="line">        err error</span><br><span class="line">    &#125;</span><br><span class="line">    dialc := <span class="built_in">make</span>(<span class="keyword">chan</span> dialRes)</span><br><span class="line">    handlePendingDial := <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">            <span class="keyword">if</span> v := &lt;-dialc; v.err == <span class="literal">nil</span> &#123;</span><br><span class="line">                t.putIdleConn(v.pc)</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;()</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        pc, err := t.dialConn(cm)</span><br><span class="line">        dialc &lt;- dialRes&#123;pc, err&#125;</span><br><span class="line">    &#125;()</span><br><span class="line">  </span><br><span class="line">    idleConnCh := t.getIdleConnCh(cm)</span><br><span class="line">    <span class="keyword">select</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> v := &lt;-dialc:</span><br><span class="line">        <span class="comment">// Our dial finished.</span></span><br><span class="line">        <span class="keyword">return</span> v.pc, v.err</span><br><span class="line">    <span class="keyword">case</span> pc := &lt;-idleConnCh:</span><br><span class="line">        handlePendingDial()</span><br><span class="line">        <span class="keyword">return</span> pc, <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>最后不能忘记处理正在dialConn的这个连接，要用handlePendingDial，把之后返回的dialconn放到idleConnCh这个map中，若发失败了，就把它直接放回缓存。失败的两种可能：</p>
+<ul>
+<li><code>t.idleConnCh[key]</code>的ch为nil，说明没有getConn需要新的连接</li>
+<li><code>t.idleConnCh[key]</code>的ch不为nil，但getConn已经退出对t.idleConnCh[key]的读取，说明dialConn已经返回了，这时需要把这个<code>delete(t.idleConnCh, key)</code>删掉</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *Transport)</span> <span class="title">putIdleConn</span><span class="params">(pconn *persistConn)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    waitingDialer := t.idleConnCh[key]</span><br><span class="line">    <span class="keyword">select</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> waitingDialer &lt;- pconn:</span><br><span class="line">        t.idleMu.Unlock()</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">        <span class="keyword">if</span> waitingDialer != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="comment">// They had populated this, but their dial won</span></span><br><span class="line">            <span class="comment">// first, so we can clean up this map entry.</span></span><br><span class="line">            <span class="built_in">delete</span>(t.idleConnCh, key)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(t.idleConn[key]) &gt;= max &#123;</span><br><span class="line">        t.idleMu.Unlock()</span><br><span class="line">        pconn.<span class="built_in">close</span>()</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">    &#125;</span><br><span class="line">    t.idleConn[key] = <span class="built_in">append</span>(t.idleConn[key], pconn)</span><br><span class="line">    t.idleMu.Unlock()</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="roundtrip-amp-loop"><a href="#roundtrip-amp-loop" class="headerlink" title="roundtrip &amp; loop"></a>roundtrip &amp; loop</h3><p>roundtrip处理读写的大致流程涉及三个goroutine，其实逻辑很简单清晰：</p>
+<ol>
+<li>dialconn新建TCP连接时，然后开始readLoop和writeLoop</li>
+<li>通过getConn获得连接后，roundtrip将req和writeErrCh发给writeLoop，writeLoop把发请求的结果通过writeErrCh通知roundtrip这个主协程</li>
+<li>同时roundtrip将req和responseAndErrorCh发给readLoop，readLoop把相应和error通知主协程。</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *Transport)</span> <span class="title">dialConn</span><span class="params">(cm connectMethod)</span> <span class="params">(*persistConn, error)</span></span> &#123;</span><br><span class="line">    pconn := &amp;persistConn&#123;</span><br><span class="line">        t:          t,</span><br><span class="line">        cacheKey:   cm.key(),</span><br><span class="line">        reqch:      <span class="built_in">make</span>(<span class="keyword">chan</span> requestAndChan, <span class="number">1</span>),</span><br><span class="line">        writech:    <span class="built_in">make</span>(<span class="keyword">chan</span> writeRequest, <span class="number">1</span>),</span><br><span class="line">        closech:    <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;),</span><br><span class="line">        writeErrCh: <span class="built_in">make</span>(<span class="keyword">chan</span> error, <span class="number">1</span>),</span><br><span class="line">    &#125;</span><br><span class="line">    conn, err := t.dial(<span class="string">"tcp"</span>, cm.addr())</span><br><span class="line">    pconn.conn = conn</span><br><span class="line"></span><br><span class="line">    pconn.br = bufio.NewReader(noteEOFReader&#123;pconn.conn, &amp;pconn.sawEOF&#125;)</span><br><span class="line">    pconn.bw = bufio.NewWriter(pconn.conn)</span><br><span class="line">    <span class="keyword">go</span> pconn.readLoop()</span><br><span class="line">    <span class="keyword">go</span> pconn.writeLoop()</span><br><span class="line">    <span class="keyword">return</span> pconn, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>roundtrip其实就是把req写到writeCh，即writeLoop开始往conn上发request，同时把resc这个用来收集response和error的ch通过pc.reqch上发给连接的readLoop。然后开始等结果，若写req错误，则返回，若读循环resc有结果也返回。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(pc *persistConn)</span> <span class="title">roundTrip</span><span class="params">(req *transportRequest)</span> <span class="params">(resp *Response, err error)</span></span> &#123;</span><br><span class="line">    writeErrCh := <span class="built_in">make</span>(<span class="keyword">chan</span> error, <span class="number">1</span>)</span><br><span class="line">    pc.writech &lt;- writeRequest&#123;req, writeErrCh&#125;</span><br><span class="line"></span><br><span class="line">    resc := <span class="built_in">make</span>(<span class="keyword">chan</span> responseAndError, <span class="number">1</span>)</span><br><span class="line">    pc.reqch &lt;- requestAndChan&#123;req.Request, resc, requestedGzip&#125;</span><br><span class="line">    <span class="keyword">var</span> re responseAndError</span><br><span class="line">WaitResponse:</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> err := &lt;-writeErrCh:</span><br><span class="line">            <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                re = responseAndError&#123;<span class="literal">nil</span>, err&#125;</span><br><span class="line">                pc.<span class="built_in">close</span>()</span><br><span class="line">                <span class="keyword">break</span> WaitResponse</span><br><span class="line">            &#125;</span><br><span class="line">        <span class="keyword">case</span> re = &lt;-resc:</span><br><span class="line">            <span class="keyword">break</span> WaitResponse</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> re.res, re.err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>writeLoop原本阻塞在&lt;-pc.writeCh，直到roundtrip开始传入req，于是往pconn上写请求。处理完一次req并返回结果后，writeLoop重新阻塞在pc.writeCh直到这个连接被复用，有另一个http请求发送。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(pc *persistConn)</span> <span class="title">writeLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> wr := &lt;-pc.writech:</span><br><span class="line">            err := wr.req.Request.write(pc.bw, pc.isProxy, wr.req.extra)</span><br><span class="line">            <span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">                err = pc.bw.Flush()</span><br><span class="line">            &#125;</span><br><span class="line">            pc.writeErrCh &lt;- err <span class="comment">// to the body reader, which might recycle us</span></span><br><span class="line">            wr.ch &lt;- err         <span class="comment">// to the roundTrip function</span></span><br><span class="line">        <span class="keyword">case</span> &lt;-pc.closech:</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>readLoop本来阻塞在pc.reqch，直到roundtrip开始，readloop开始读取pconn的response，并把结果返回给主循环。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(pc *persistConn)</span> <span class="title">readLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">    alive := <span class="literal">true</span></span><br><span class="line">    <span class="keyword">for</span> alive &#123;</span><br><span class="line">        pb, err := pc.br.Peek(<span class="number">1</span>)</span><br><span class="line">        rc := &lt;-pc.reqch</span><br><span class="line">        ...</span><br><span class="line">        resp, err = ReadResponse(pc.br, rc.req) </span><br><span class="line">        rc.ch &lt;- responseAndError&#123;resp, err&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    pc.<span class="built_in">close</span>()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="遗留问题"><a href="#遗留问题" class="headerlink" title="遗留问题"></a>遗留问题</h2><p>整个golang http包的实现很容易理解，就好像同步阻塞的在处理并发请求，当然这有赖于runtime层封装了epoll等事件驱动，并结合goroutine实现并发处理请求。</p>
+<ol>
+<li>默认client的Transport有keepAlive机制，server侧也有，那如果两端都不关闭net.Conn也不发送数据，将持久占用这条连接。事实上tcpdump发现最后client主动向server发了FIN包关闭连接，<a href="">golang的垃圾回收与Finalizer</a> 提到这跟net的GC有关，待考证。<a href="">Linux中每个TCP连接最少占用多少内存</a> 提到3K左右，长期不断地连接将耗尽资源。</li>
+<li>如果resp.Body.Close不执行，连接将无法被复用。这个问题 <a href="">Go HTTP Client持久连接</a> 一文中提到。</li>
+<li>Dial的TimeOut时间以及其他TimeOut时间，如果不设置将很快连接泄露，耗尽所有文件描述符。<a href="">Go net/http超时机制完全手册[译]</a>译文中详细解释了各种timeout时间，可参考。</li>
+<li><strong>CLOSE_WAIT与TIME_WAIT问题</strong>的产生原因和解决</li>
+</ol>
+<p><strong>总结：</strong>想保持http的keepalive复用连接，首先使用一个Transport，配置最大连接复用数目（默认为2）为合理值，记得关闭相应的body体，同时设置合理的timeout时间，不让一次HTTP事务长时间占据conn。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><a href="https://www.byvoid.com/zhs/blog/http-keep-alive-header" target="_blank" rel="noopener">HTTP协议头部与Keep-Alive模式详解</a></li>
+<li><a href="https://huoding.com/2013/12/31/316" target="_blank" rel="noopener">再叙timeWait</a></li>
+</ul>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Golang/" rel="tag"># Golang</a>
+          
+            <a href="/tags/network/" rel="tag"># network</a>
+          
+            <a href="/tags/HTTP/" rel="tag"># HTTP</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/02/18/IO多路复用与Go网络库的实现/" rel="next" title="IO多路复用与Go网络库的实现">
+                <i class="fa fa-chevron-left"></i> IO多路复用与Go网络库的实现
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/03/20/记fastHTTP协程池的实现/" rel="prev" title="记fastHTTP协程池的实现">
+                记fastHTTP协程池的实现 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/nino.jpg"
+                alt="nino" />
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">25</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/ninokop" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="http://weibo.com/u/1732126300" target="_blank" title="WeiBo">
+                    
+                      <i class="fa fa-fw fa-globe"></i>WeiBo</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#HTTP协议"><span class="nav-number">1.</span> <span class="nav-text">HTTP协议</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#TCP连接管理"><span class="nav-number">1.1.</span> <span class="nav-text">TCP连接管理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#HTTP2的区别"><span class="nav-number">1.2.</span> <span class="nav-text">HTTP2的区别</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#HTTPS引入"><span class="nav-number">1.3.</span> <span class="nav-text">HTTPS引入</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#go-http-server"><span class="nav-number">2.</span> <span class="nav-text">go-http-server</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#listen-amp-serve"><span class="nav-number">2.1.</span> <span class="nav-text">listen &amp; serve</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#conn"><span class="nav-number">2.2.</span> <span class="nav-text">conn</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#server-mux"><span class="nav-number">2.3.</span> <span class="nav-text">server mux</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#go-http-client"><span class="nav-number">3.</span> <span class="nav-text">go-http-client</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#client"><span class="nav-number">3.1.</span> <span class="nav-text">client</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#transport"><span class="nav-number">3.2.</span> <span class="nav-text">transport</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#idleConn"><span class="nav-number">3.3.</span> <span class="nav-text">idleConn</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#roundtrip-amp-loop"><span class="nav-number">3.4.</span> <span class="nav-text">roundtrip &amp; loop</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#遗留问题"><span class="nav-number">4.</span> <span class="nav-text">遗留问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference"><span class="nav-number">5.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.3</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

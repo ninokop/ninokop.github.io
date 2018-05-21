@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Golang," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="上一篇博客总结了Go调度器的设计以及go调度器解决如何解决了用户态线程典型问题，这一篇就跟踪下Goroutine的源码实现。Go1.5源码剖析 已经写的非常详细了，我只把我觉得重要的地方集中总结一下。这两篇写好挺久了，以后再补充。 Go程序初始化过程C程序的入口地址通常是C运行库的_start函数，它完成了初始化堆栈、命令行参数设置、环境变量初始化、IO初始化、线程相关初始化或者还有全局构造。Go">
+<meta name="keywords" content="Golang">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Goroutine源码记录">
+<meta property="og:url" content="http://yoursite.com/2017/12/09/Goroutine源码记录/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="上一篇博客总结了Go调度器的设计以及go调度器解决如何解决了用户态线程典型问题，这一篇就跟踪下Goroutine的源码实现。Go1.5源码剖析 已经写的非常详细了，我只把我觉得重要的地方集中总结一下。这两篇写好挺久了，以后再补充。 Go程序初始化过程C程序的入口地址通常是C运行库的_start函数，它完成了初始化堆栈、命令行参数设置、环境变量初始化、IO初始化、线程相关初始化或者还有全局构造。Go">
+<meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2018-04-27T01:39:54.923Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Goroutine源码记录">
+<meta name="twitter:description" content="上一篇博客总结了Go调度器的设计以及go调度器解决如何解决了用户态线程典型问题，这一篇就跟踪下Goroutine的源码实现。Go1.5源码剖析 已经写的非常详细了，我只把我觉得重要的地方集中总结一下。这两篇写好挺久了，以后再补充。 Go程序初始化过程C程序的入口地址通常是C运行库的_start函数，它完成了初始化堆栈、命令行参数设置、环境变量初始化、IO初始化、线程相关初始化或者还有全局构造。Go">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2017/12/09/Goroutine源码记录/"/>
+
+
+
+
+
+  <title>Goroutine源码记录 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/12/09/Goroutine源码记录/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Goroutine源码记录</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2017-12-09T21:02:58+08:00">
+                2017-12-09
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Golang/" itemprop="url" rel="index">
+                    <span itemprop="name">Golang</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>上一篇博客总结了Go调度器的设计以及go调度器解决如何解决了用户态线程典型问题，这一篇就跟踪下Goroutine的源码实现。<a href="https://github.com/qyuhen/book/blob/master/Go%201.5%20%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90%20%EF%BC%88%E4%B9%A6%E7%AD%BE%E7%89%88%EF%BC%89.pdf" target="_blank" rel="noopener">Go1.5源码剖析</a> 已经写的非常详细了，我只把我觉得重要的地方集中总结一下。这两篇写好挺久了，以后再补充。</p>
+<h2 id="Go程序初始化过程"><a href="#Go程序初始化过程" class="headerlink" title="Go程序初始化过程"></a>Go程序初始化过程</h2><p>C程序的入口地址通常是C运行库的_start函数，它完成了初始化堆栈、命令行参数设置、环境变量初始化、IO初始化、线程相关初始化或者还有全局构造。Go的入口函数整个初始化过程也完成了类似的工作。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">runtime.args   <span class="comment">// 整理命令行参数 设置环境变量</span></span><br><span class="line">runtime.osinit  <span class="comment">// 确定CPU的core数目 调整procs的值</span></span><br><span class="line">runtime.schedinit  <span class="comment">// 初始化栈 内存分配器 垃圾回收器和并发调度器</span></span><br></pre></td></tr></table></figure>
+<p>初始化过程之后进入了<code>runtime.main</code>。这时启动了后台监控线程<code>sysmon</code>。执行了runtime包和用户包所有初始化init函数之后进入用户的<code>main</code>函数。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="comment">// new os thread for sysmon</span></span><br><span class="line">    systemstack(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        newm(sysmon, <span class="literal">nil</span>)</span><br><span class="line">    &#125;)</span><br><span class="line"></span><br><span class="line">    runtime_init() <span class="comment">// must be before defer</span></span><br><span class="line">    gcenable()</span><br><span class="line">    main_init()</span><br><span class="line">    main_main()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>需要注意的是runtime.main是通过<code>newproc</code>和<code>mstart</code>创建的。<strong>也就是说main对应的是goroutine而不是线程，所以它的地位还没有<code>sysmon</code>高啊</strong>。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">runtime.newproc</span><br><span class="line">runtime.mstart</span><br></pre></td></tr></table></figure>
+<h2 id="P与G的创建"><a href="#P与G的创建" class="headerlink" title="P与G的创建"></a>P与G的创建</h2><h3 id="schedinit"><a href="#schedinit" class="headerlink" title="schedinit"></a>schedinit</h3><p>schedinit中与调度器相关的操作包括，设置最大的M数量10000；初始化当前的m；初始化P的数目默认为CPU核数，可以通过环境变量GOMAXPROCS设置；最后调整P的大小。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">schedinit</span><span class="params">()</span></span> &#123;</span><br><span class="line"> ...</span><br><span class="line">    sched.maxmcount = <span class="number">10000</span></span><br><span class="line">    mcommoninit(_g_.m)</span><br><span class="line"></span><br><span class="line">    procs := <span class="keyword">int</span>(ncpu)</span><br><span class="line">    <span class="keyword">if</span> n := atoi(gogetenv(<span class="string">"GOMAXPROCS"</span>)); n &gt; <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> n &gt; _MaxGomaxprocs &#123;</span><br><span class="line">            n = _MaxGomaxprocs</span><br><span class="line">        &#125;</span><br><span class="line">        procs = n</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> procresize(<span class="keyword">int32</span>(procs)) != <span class="literal">nil</span> &#123;</span><br><span class="line">        throw(<span class="string">"unknown runnable goroutine during bootstrap"</span>)</span><br><span class="line">    &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>调整P大小是因为P保存在全局数组<code>allp</code>中，它在.data段就分配了空间 <code>[_MaxGomaxprocs + 1]*p</code>，这对应着256+1个指针空间。在<code>schedinit</code>中通过<code>procresize</code>将这个空间里的<code>nprocs</code>个指针初始化，其余的删除。</p>
+<ul>
+<li>freeUnused P时要处理P里面原始的G队列，将他们放到全局schedt中。当然schedinit时不存在这个操作，<strong>这个逻辑是startTheWorld修改P数目准备的</strong>。</li>
+<li>如果当前的P是被释放的那一拨，则将当前P与M分离，将M与allp[0]绑定。</li>
+<li>处理allp[0-nprocs]，将没有本地G的P放入schedt的全局idleP链表，将有本地G队列的作为runnalblePs链表返回。</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">procresize</span><span class="params">(nprocs <span class="keyword">int32</span>)</span> *<span class="title">p</span></span> &#123;</span><br><span class="line">...</span><br><span class="line">    <span class="comment">// initialize new P's</span></span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">int32</span>(<span class="number">0</span>); i &lt; nprocs; i++ &#123;</span><br><span class="line">        pp := allp[i]</span><br><span class="line">        <span class="keyword">if</span> pp == <span class="literal">nil</span> &#123;</span><br><span class="line">            pp = <span class="built_in">new</span>(p)</span><br><span class="line">            pp.id = i</span><br><span class="line">            pp.status = _Pgcstop     ...</span><br><span class="line">            atomicstorep(unsafe.Pointer(&amp;allp[i]), unsafe.Pointer(pp))</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> pp.mcache == <span class="literal">nil</span> &#123;</span><br><span class="line">           pp.mcache = allocmcache()         </span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// free unused P's</span></span><br><span class="line">    <span class="keyword">for</span> i := nprocs; i &lt; old; i++ &#123;</span><br><span class="line">        p := allp[i]</span><br><span class="line">        <span class="comment">// move all runnable goroutines to the global queue</span></span><br><span class="line">        <span class="keyword">for</span> p.runqhead != p.runqtail &#123;</span><br><span class="line">            p.runqtail--</span><br><span class="line">            gp := p.runq[p.runqtail%<span class="keyword">uint32</span>(<span class="built_in">len</span>(p.runq))]</span><br><span class="line">            globrunqputhead(gp)</span><br><span class="line">        &#125;</span><br><span class="line">     </span><br><span class="line">        freemcache(p.mcache)</span><br><span class="line">        p.mcache = <span class="literal">nil</span></span><br><span class="line">        p.status = _Pdead</span><br><span class="line">        <span class="comment">// can't free P itself because it can be </span></span><br><span class="line">        <span class="comment">// referenced by an M in syscall</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    _g_ := getg()</span><br><span class="line">    <span class="keyword">if</span> _g_.m.p != <span class="number">0</span> &amp;&amp; _g_.m.p.ptr().id &lt; nprocs &#123;</span><br><span class="line">        <span class="comment">// continue to use the current P</span></span><br><span class="line">        _g_.m.p.ptr().status = _Prunning</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// release the current P and acquire allp[0]</span></span><br><span class="line">        _g_.m.p = <span class="number">0</span></span><br><span class="line">        _g_.m.mcache = <span class="literal">nil</span></span><br><span class="line">        p := allp[<span class="number">0</span>]</span><br><span class="line">        p.m = <span class="number">0</span></span><br><span class="line">        p.status = _Pidle</span><br><span class="line">        acquirep(p)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">var</span> runnablePs *p</span><br><span class="line">    <span class="keyword">for</span> i := nprocs - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i-- &#123;</span><br><span class="line">        p := allp[i]</span><br><span class="line">        <span class="keyword">if</span> _g_.m.p.ptr() == p &#123;</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line">        p.status = _Pidle</span><br><span class="line">        <span class="keyword">if</span> runqempty(p) &#123;</span><br><span class="line">            pidleput(p)</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            p.m.set(mget())</span><br><span class="line">            p.link.set(runnablePs)</span><br><span class="line">            runnablePs = p</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    atomicstore((*<span class="keyword">uint32</span>)(unsafe.Pointer(int32p)), <span class="keyword">uint32</span>(nprocs))</span><br><span class="line">    <span class="keyword">return</span> runnablePs</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="newproc"><a href="#newproc" class="headerlink" title="newproc"></a>newproc</h3><p>go编译器将<code>go func()</code> 翻译成<code>runtime.newproc()</code>。为了go func的执行，从右到左入栈了调用方的PC寄存器，返回值数目，参数数目，第一个参数的地址以及函数地址。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newproc</span><span class="params">(siz <span class="keyword">int32</span>, fn *funcval)</span></span> &#123;</span><br><span class="line">	argp := add(unsafe.Pointer(&amp;fn), ptrSize)</span><br><span class="line">	pc := getcallerpc(unsafe.Pointer(&amp;siz))</span><br><span class="line">	systemstack(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">		newproc1(fn, (*<span class="keyword">uint8</span>)(argp), siz, <span class="number">0</span>, pc)</span><br><span class="line">	&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>newproc1</code>创建了G实例。从<code>gfget()</code>获取空闲的G对象，若获取失败则<code>malg</code>新建G对象。设置栈空间和保存现场的sched域以及初始状态Grunnable，runqput放入待运行队列，如果有空闲的P则尝试唤醒它来执行。</p>
+<ul>
+<li><code>gfget</code>是从p的gfree列表或全局sched的gfree链表中获取可以复用的G对象。当goroutine结束时调用<code>goexit0</code>时会将当前的G对象gfput到p本地的gfree队列中。</li>
+<li><code>malg</code>用默认的2KB栈空间来将<code>new(g)</code>创建的新G对象初始化。主要是通过<code>stackalloc</code>初始化newg.stack。</li>
+<li>go func指定的执行参数会被拷贝到G的栈空间，因为它跟main所在的栈不再有任何关系，各自使用独立的栈空间。</li>
+<li>创建好的G优先放入P.runnext，或者放入数组实现的循环队列P.runq，若本地队列<code>runq [256]*g</code>已满则加锁放入全局队列Sched.runq。</li>
+<li>如果本地队列满会通过<code>runqputslow</code> 将P本地一半的任务G放到全局队列中。使得别的P可以去执行，这也是最后wakeP去唤醒其他M/P执行任务的原因。</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newproc1</span><span class="params">(fn *funcval, argp *<span class="keyword">uint8</span>, narg <span class="keyword">int32</span>,</span></span></span><br><span class="line"><span class="function"><span class="params">              nret <span class="keyword">int32</span>, callerpc <span class="keyword">uintptr</span>)</span> *<span class="title">g</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line">    _p_ := _g_.m.p.ptr()</span><br><span class="line">  </span><br><span class="line">    newg := gfget(_p_) <span class="comment">// 获取空闲的可复用的G对象</span></span><br><span class="line">    <span class="keyword">if</span> newg == <span class="literal">nil</span> &#123;</span><br><span class="line">        newg = malg(_StackMin)  <span class="comment">// 新建栈空间为2KB的G对象</span></span><br><span class="line">        casgstatus(newg, _Gidle, _Gdead) <span class="comment">// 设置G状态位Gdead</span></span><br><span class="line">        allgadd(newg)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">  ...</span><br><span class="line">    <span class="comment">// 确定栈顶位置 并且入栈参数列表和参数个数</span></span><br><span class="line">    memmove(unsafe.Pointer(spArg), unsafe.Pointer(argp), <span class="keyword">uintptr</span>(narg))</span><br><span class="line">    <span class="comment">// 初始化用于保存执行现场的sched域</span></span><br><span class="line">    memclr(unsafe.Pointer(&amp;newg.sched), unsafe.Sizeof(newg.sched))</span><br><span class="line">    newg.sched.sp = sp</span><br><span class="line">    <span class="comment">// 指定了G任务函数的返回地址 goexit</span></span><br><span class="line">    newg.sched.pc = funcPC(goexit) + _PCQuantum </span><br><span class="line">    newg.sched.g = guintptr(unsafe.Pointer(newg))</span><br><span class="line">    gostartcallfn(&amp;newg.sched, fn)</span><br><span class="line">  </span><br><span class="line">    <span class="comment">//设置status和id域</span></span><br><span class="line">    newg.gopc = callerpc</span><br><span class="line">    newg.startpc = fn.fn</span><br><span class="line">    casgstatus(newg, _Gdead, _Grunnable)</span><br><span class="line">...</span><br><span class="line">    newg.goid = <span class="keyword">int64</span>(_p_.goidcache)</span><br><span class="line">    _p_.goidcache++</span><br><span class="line">    <span class="comment">// 将G放入待运行队列</span></span><br><span class="line">    runqput(_p_, newg, <span class="literal">true</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 如果有全局空闲的P 则尝试唤醒waitP来执行</span></span><br><span class="line">    <span class="comment">// 如果有M处于自旋等待P或G的状态 放弃</span></span><br><span class="line">    <span class="comment">// 如果当前创建的是 runtime.main 放弃</span></span><br><span class="line">    <span class="keyword">if</span> atomicload(&amp;sched.npidle) != <span class="number">0</span> &amp;&amp;</span><br><span class="line">  atomicload(&amp;sched.nmspinning) == <span class="number">0</span> &amp;&amp; </span><br><span class="line">  unsafe.Pointer(fn.fn) != unsafe.Pointer(funcPC(main)) &#123;</span><br><span class="line">        wakep()</span><br><span class="line">    &#125;</span><br><span class="line">...</span><br><span class="line">    <span class="keyword">return</span> newg</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="M的创建和G的执行"><a href="#M的创建和G的执行" class="headerlink" title="M的创建和G的执行"></a>M的创建和G的执行</h2><p>从上一节可见<code>runtime.newproc</code>只是创建了G并放入当前P的G队列或全局G队列。如果是main goroutine，则显示调用<code>mstart</code>；其他goroutine则尝试wakeP去启动M的创建和G的执行。</p>
+<h3 id="wakeP-startm"><a href="#wakeP-startm" class="headerlink" title="wakeP+startm"></a>wakeP+startm</h3><p>首先G创建后会尝试通过<code>pidleget</code>去Sched.pidle链表获取空闲的P来执行，若没有的话就继续排队等待现有的P执行。获取到P后需要绑定M来执行，这时可以从shec.midle中获取可复用的m，通过<code>notewakeup</code>唤醒M；若没有空闲的M则重建<code>newm</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">wakep</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="comment">// be conservative about spinning threads</span></span><br><span class="line">    <span class="keyword">if</span> !cas(&amp;sched.nmspinning, <span class="number">0</span>, <span class="number">1</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    startm(<span class="literal">nil</span>, <span class="literal">true</span>)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">startm</span><span class="params">(_p_ *p, spinning <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">    lock(&amp;sched.lock)</span><br><span class="line">    <span class="comment">// 如果startm没有指定P则尝试获取空闲的P</span></span><br><span class="line">    <span class="keyword">if</span> _p_ == <span class="literal">nil</span> &#123;</span><br><span class="line">        _p_ = pidleget()</span><br><span class="line">        <span class="keyword">if</span> _p_ == <span class="literal">nil</span> &#123;</span><br><span class="line">            unlock(&amp;sched.lock)</span><br><span class="line">            <span class="keyword">if</span> spinning &#123;</span><br><span class="line">                xadd(&amp;sched.nmspinning, <span class="number">-1</span>)</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    mp := mget() <span class="comment">//获取闲置的M若无则新建newM</span></span><br><span class="line">    unlock(&amp;sched.lock)</span><br><span class="line">    <span class="keyword">if</span> mp == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">var</span> fn <span class="function"><span class="keyword">func</span><span class="params">()</span></span></span><br><span class="line"><span class="function">        <span class="title">if</span> <span class="title">spinning</span></span> &#123;</span><br><span class="line">            fn = mspinning</span><br><span class="line">        &#125;</span><br><span class="line">        newm(fn, _p_)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    mp.spinning = spinning</span><br><span class="line">    mp.nextp.set(_p_)</span><br><span class="line">    notewakeup(&amp;mp.park)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="newM"><a href="#newM" class="headerlink" title="newM"></a>newM</h3><p><code>allocm</code>主要就是初始化了m自带的名为g0的栈，默认8KB栈内存。它的栈内存地址会被传给<code>newosproc</code>，作为系统线程默认的栈空间。<code>mcommoninit</code>检查M数目是否超过默认的10000，然后将m添加到<code>allm</code>链表且不会释放。<code>newosproc</code> 表示创建OS线程，Linux调用的是<code>clone</code>，并指定了以下flags表示哪些进程资源可以共享，最后CLONE_THREAD表示clone出来的是线程，与当前进程显示同一个pid。同时指定了OS线程对应的启动函数是<code>mstart</code>。</p>
+<blockquote>
+<p>CLONE_VM| CLONE_FS | CLONE_FILES| CLONE_SIGHAND | CLONE_THREAD</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newm</span><span class="params">(fn <span class="keyword">func</span>()</span>, _<span class="title">p_</span> *<span class="title">p</span>)</span> &#123;</span><br><span class="line">    mp := allocm(_p_, fn)</span><br><span class="line">    <span class="comment">// 设置p设置到m的nextp域</span></span><br><span class="line">    mp.nextp.set(_p_)</span><br><span class="line">    msigsave(mp)</span><br><span class="line">...</span><br><span class="line">    newosproc(mp, unsafe.Pointer(mp.g0.stack.hi))</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">allocm</span><span class="params">(_p_ *p, fn <span class="keyword">func</span>()</span>) *<span class="title">m</span></span> &#123;</span><br><span class="line">...</span><br><span class="line">    mp := <span class="built_in">new</span>(m)</span><br><span class="line">    mp.mstartfn = fn</span><br><span class="line">    mcommoninit(mp)</span><br><span class="line">    mp.g0 = malg(<span class="number">8192</span> * stackGuardMultiplier)</span><br><span class="line">    mp.g0.m = mp</span><br><span class="line">...</span><br><span class="line">    <span class="keyword">return</span> mp</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newosproc</span><span class="params">(mp *m, stk unsafe.Pointer)</span></span> &#123;</span><br><span class="line">    ret := clone(cloneFlags, stk, unsafe.Pointer(mp), </span><br><span class="line">      unsafe.Pointer(mp.g0), unsafe.Pointer(funcPC(mstart)))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="mstart"><a href="#mstart" class="headerlink" title="mstart"></a>mstart</h3><p>无论是main goroutine还是其他goroutine，最终G执行的起点都是mstart。mstart主要设置了G的stack空间边界以及将m与它的nextp进行绑定。绑定过程<code>acquirep</code>，即m获取p的mcache并设置P的状态为prunning。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">mstart</span><span class="params">()</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line">    <span class="comment">// Initialize stack guards so that we can start calling</span></span><br><span class="line">    <span class="comment">// both Go and C functions with stack growth prologues.</span></span><br><span class="line">    _g_.stackguard0 = _g_.stack.lo + _StackGuard</span><br><span class="line">    _g_.stackguard1 = _g_.stackguard0</span><br><span class="line">    mstart1()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">mstart1</span><span class="params">()</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line">    <span class="comment">// 初始化g0执行现场</span></span><br><span class="line">    gosave(&amp;_g_.m.g0.sched)</span><br><span class="line">    _g_.m.g0.sched.pc = ^<span class="keyword">uintptr</span>(<span class="number">0</span>) <span class="comment">// make sure it is never used</span></span><br><span class="line">    asminit()</span><br><span class="line">    minit()</span><br><span class="line">    <span class="comment">// 执行启动函数 通常是mspinning() sched.nmspinning--</span></span><br><span class="line">    <span class="keyword">if</span> fn := _g_.m.mstartfn; fn != <span class="literal">nil</span> &#123;</span><br><span class="line">        fn()</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 将m与它的nextp绑定</span></span><br><span class="line">    <span class="keyword">if</span> _g_.m.helpgc != <span class="number">0</span> &#123;</span><br><span class="line">        _g_.m.helpgc = <span class="number">0</span></span><br><span class="line">        stopm()</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> _g_.m != &amp;m0 &#123;</span><br><span class="line">        acquirep(_g_.m.nextp.ptr())</span><br><span class="line">        _g_.m.nextp = <span class="number">0</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 进入任务调度循环 不再返回</span></span><br><span class="line">    schedule()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="schedule"><a href="#schedule" class="headerlink" title="schedule"></a>schedule</h3><p>总结G的执行过程：从各种渠道获取G任务+执行execute这个G任务。执行G时需要从当前g0栈切换到G的栈执行，返回时执行goexit清理现场，然后重新进入schedule。</p>
+<ul>
+<li>获取G任务优先从本地P队列中runqget获取，另外每处理n个任务就要去全局获取G任务，如果本地G和全局G，甚至网络任务netpoll都没有，则从其它的P队列steal。</li>
+<li>execute任务是最终调用的是<code>gogo</code>函数。它完成了g0栈道G栈的切换，JMP到G任务函数代码执行。</li>
+<li>G任务返回时执行的是<code>goexit</code>，因为在newproc1初始化G时，它的栈空间入栈的返回地址是goexit。<code>goexit</code>完成了G状态的清理，将G放回复用链表重新进入调度循环。</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">schedule</span><span class="params">()</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line">top:</span><br><span class="line">    <span class="keyword">var</span> gp *g</span><br><span class="line">    <span class="keyword">var</span> inheritTime <span class="keyword">bool</span></span><br><span class="line">    <span class="keyword">if</span> gp == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="comment">// 处理n个任务后就去全局队列中获取G任务，以确保公平</span></span><br><span class="line">        <span class="keyword">if</span> _g_.m.p.ptr().schedtick%<span class="number">61</span> == <span class="number">0</span> &amp;&amp; sched.runqsize &gt; <span class="number">0</span> &#123;</span><br><span class="line">            lock(&amp;sched.lock)</span><br><span class="line">            gp = globrunqget(_g_.m.p.ptr(), <span class="number">1</span>)</span><br><span class="line">            unlock(&amp;sched.lock)</span><br><span class="line">            <span class="keyword">if</span> gp != <span class="literal">nil</span> &#123;</span><br><span class="line">                resetspinning()</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 从P本地队列获取G任务</span></span><br><span class="line">    <span class="keyword">if</span> gp == <span class="literal">nil</span> &#123;</span><br><span class="line">        gp, inheritTime = runqget(_g_.m.p.ptr())</span><br><span class="line">        <span class="keyword">if</span> gp != <span class="literal">nil</span> &amp;&amp; _g_.m.spinning &#123;</span><br><span class="line">            throw(<span class="string">"schedule: spinning with local work"</span>)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  </span><br><span class="line">    <span class="comment">// 从其它可能的地方获取G 若获取失败则block M进入休眠状态</span></span><br><span class="line">    <span class="keyword">if</span> gp == <span class="literal">nil</span> &#123;</span><br><span class="line">        gp, inheritTime = findrunnable() </span><br><span class="line">        resetspinning()</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 执行G</span></span><br><span class="line">    execute(gp, inheritTime)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">execute</span><span class="params">(gp *g, inheritTime <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line">    casgstatus(gp, _Grunnable, _Grunning)</span><br><span class="line">    gp.waitsince = <span class="number">0</span></span><br><span class="line">    gp.preempt = <span class="literal">false</span></span><br><span class="line">    gp.stackguard0 = gp.stack.lo + _StackGuard</span><br><span class="line">    <span class="keyword">if</span> !inheritTime &#123;</span><br><span class="line">        _g_.m.p.ptr().schedtick++</span><br><span class="line">    &#125;</span><br><span class="line">    _g_.m.curg = gp</span><br><span class="line">    gp.m = _g_.m</span><br><span class="line">    gogo(&amp;gp.sched)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">goexit0</span><span class="params">(gp *g)</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line">    casgstatus(gp, _Grunning, _Gdead)</span><br><span class="line">    gp.m = <span class="literal">nil</span></span><br><span class="line">...</span><br><span class="line">    gfput(_g_.m.p.ptr(), gp)</span><br><span class="line">    schedule()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="状态变迁"><a href="#状态变迁" class="headerlink" title="状态变迁"></a>状态变迁</h2><h3 id="P与G的状态变迁"><a href="#P与G的状态变迁" class="headerlink" title="P与G的状态变迁"></a>P与G的状态变迁</h3><p>P创建于schedinit程序初始化时，除了当前对应main goroutine的P，其他npcrocs-1个P都放进空闲P链表中等待使用，状态为Pidle。当m与p绑定时调用<code>acquirep</code>会将P状态设置为Prunning。Psyscall只有进入系统调用时发生。Pdead只有调整prosize大小时用到。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> (</span><br><span class="line">    _Pidle    = <span class="literal">iota</span></span><br><span class="line">    _Prunning <span class="comment">// Only this P is allowed to change from _Prunning.</span></span><br><span class="line">    _Psyscall</span><br><span class="line">    _Pgcstop</span><br><span class="line">    _Pdead</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>G创建于newproc即通过go关键字调用函数时初始为Gidle。在给G分配栈空间之前G为Gdead，初始化后放进队列之前状态改为Grunnable。m真正执行到G后状态才是Grunning。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> (</span><br><span class="line">    _Gidle            = <span class="literal">iota</span> <span class="comment">// 0</span></span><br><span class="line">    _Grunnable               <span class="comment">// 1 runnable and on a run queue</span></span><br><span class="line">    _Grunning                <span class="comment">// 2</span></span><br><span class="line">    _Gsyscall                <span class="comment">// 3</span></span><br><span class="line">    _Gwaiting                <span class="comment">// 4</span></span><br><span class="line">    _Gmoribund_unused        <span class="comment">// 5 currently unused, but hardcoded in gdb scripts</span></span><br><span class="line">    _Gdead                   <span class="comment">// 6</span></span><br><span class="line">    _Genqueue                <span class="comment">// 7 Only the Gscanenqueue is used.</span></span><br><span class="line">    _Gcopystack              <span class="comment">// 8 in this state when newstack is moving the stack</span></span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h3 id="gopark-goready"><a href="#gopark-goready" class="headerlink" title="gopark+goready"></a>gopark+goready</h3><p>Gwaiting只有<code>park_m</code>才会出现，这时除非发生<code>runtime.ready</code>否则G永远不会执行。因为Gwaiting并不出现在待运行队列中。channel操作 定时器 网络poll都有可能park goroutine。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">park_m</span><span class="params">(gp *g)</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line">    casgstatus(gp, _Grunning, _Gwaiting)</span><br><span class="line">    dropg()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> _g_.m.waitunlockf != <span class="literal">nil</span> &#123;</span><br><span class="line">        fn := *(*<span class="function"><span class="keyword">func</span><span class="params">(*g, unsafe.Pointer)</span> <span class="title">bool</span>)<span class="params">(unsafe.Pointer(&amp;_g_.m.waitunlockf)</span>)</span></span><br><span class="line"><span class="function">        <span class="title">ok</span> := <span class="title">fn</span><span class="params">(gp, _g_.m.waitlock)</span></span></span><br><span class="line"><span class="function">        _<span class="title">g_</span>.<span class="title">m</span>.<span class="title">waitunlockf</span> = <span class="title">nil</span></span></span><br><span class="line"><span class="function">        _<span class="title">g_</span>.<span class="title">m</span>.<span class="title">waitlock</span> = <span class="title">nil</span></span></span><br><span class="line"><span class="function">        <span class="title">if</span> !<span class="title">ok</span></span> &#123;</span><br><span class="line">            casgstatus(gp, _Gwaiting, _Grunnable)</span><br><span class="line">            execute(gp, <span class="literal">true</span>) <span class="comment">// Schedule it back, never returns.</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    schedule()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="midle与gsyscall"><a href="#midle与gsyscall" class="headerlink" title="midle与gsyscall"></a>midle与gsyscall</h3><p>当陷入系统调用的G返回时，首先要dropg与原始的M分开，因为原始的M已经没有P给它提供内存了。之后G要重新pidleget找到一个空闲的P入队，若没有则入队全局队列。最后stopm停止当前m并继续schedule。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">exitsyscall0</span><span class="params">(gp *g)</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line"></span><br><span class="line">    casgstatus(gp, _Gsyscall, _Grunnable)</span><br><span class="line">    dropg()</span><br><span class="line">    lock(&amp;sched.lock)</span><br><span class="line">    _p_ := pidleget()</span><br><span class="line">    <span class="keyword">if</span> _p_ == <span class="literal">nil</span> &#123;</span><br><span class="line">        globrunqput(gp)</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> atomicload(&amp;sched.sysmonwait) != <span class="number">0</span> &#123;</span><br><span class="line">        atomicstore(&amp;sched.sysmonwait, <span class="number">0</span>)</span><br><span class="line">        notewakeup(&amp;sched.sysmonnote)</span><br><span class="line">    &#125;</span><br><span class="line">    unlock(&amp;sched.lock)</span><br><span class="line">    <span class="keyword">if</span> _p_ != <span class="literal">nil</span> &#123;</span><br><span class="line">        acquirep(_p_)</span><br><span class="line">        execute(gp, <span class="literal">false</span>) <span class="comment">// Never returns.</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> _g_.m.lockedg != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="comment">// Wait until another thread schedules gp and so m again.</span></span><br><span class="line">        stoplockedm()</span><br><span class="line">        execute(gp, <span class="literal">false</span>) <span class="comment">// Never returns.</span></span><br><span class="line">    &#125;</span><br><span class="line">    stopm()</span><br><span class="line">    schedule() <span class="comment">// Never returns.</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>当M从系统调用退出时<code>exitsyscall0</code>会调用<code>stopm</code>把m放进空闲m链表，陷入休眠等待被唤醒。startm时所谓空闲的M的来源就是从系统调用中恢复的M。startm发生在两个时候：有新的G加入wakeP时，handOffP时P还有别的G任务。这时都会触发空闲M重用，对应<code>notewakeup</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stopm</span><span class="params">()</span></span> &#123;</span><br><span class="line">    _g_ := getg()</span><br><span class="line">retry:</span><br><span class="line">    lock(&amp;sched.lock)</span><br><span class="line">    mput(_g_.m)</span><br><span class="line">    unlock(&amp;sched.lock)</span><br><span class="line">    notesleep(&amp;_g_.m.park)</span><br><span class="line">    noteclear(&amp;_g_.m.park)</span><br><span class="line">    acquirep(_g_.m.nextp.ptr())</span><br><span class="line">    _g_.m.nextp = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Golang/" rel="tag"># Golang</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/12/07/Go-垃圾回收/" rel="next" title="Go 垃圾回收">
+                <i class="fa fa-chevron-left"></i> Go 垃圾回收
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/12/10/Goroutine浅析/" rel="prev" title="Goroutine浅析">
+                Goroutine浅析 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/nino.jpg"
+                alt="nino" />
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">25</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/ninokop" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="http://weibo.com/u/1732126300" target="_blank" title="WeiBo">
+                    
+                      <i class="fa fa-fw fa-globe"></i>WeiBo</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Go程序初始化过程"><span class="nav-number">1.</span> <span class="nav-text">Go程序初始化过程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#P与G的创建"><span class="nav-number">2.</span> <span class="nav-text">P与G的创建</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#schedinit"><span class="nav-number">2.1.</span> <span class="nav-text">schedinit</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#newproc"><span class="nav-number">2.2.</span> <span class="nav-text">newproc</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#M的创建和G的执行"><span class="nav-number">3.</span> <span class="nav-text">M的创建和G的执行</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#wakeP-startm"><span class="nav-number">3.1.</span> <span class="nav-text">wakeP+startm</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#newM"><span class="nav-number">3.2.</span> <span class="nav-text">newM</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#mstart"><span class="nav-number">3.3.</span> <span class="nav-text">mstart</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#schedule"><span class="nav-number">3.4.</span> <span class="nav-text">schedule</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#状态变迁"><span class="nav-number">4.</span> <span class="nav-text">状态变迁</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#P与G的状态变迁"><span class="nav-number">4.1.</span> <span class="nav-text">P与G的状态变迁</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#gopark-goready"><span class="nav-number">4.2.</span> <span class="nav-text">gopark+goready</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#midle与gsyscall"><span class="nav-number">4.3.</span> <span class="nav-text">midle与gsyscall</span></a></li></ol></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.3</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

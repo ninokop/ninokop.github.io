@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Kubernetes," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="前两年根据Kube-Infomer的框架，写过route-controller实现gorouter和kubenretes集群中应用路由的转发，还写过一个stack-controller实现AOS的堆栈管理，当时对照1.5和1.7版本的代码做了些总结。1.9之后informer已经完全迁移到client-go了，根据1.9的代码整理一遍框架的源码实现。informer作为异步事件处理框架，完成了事件">
+<meta name="keywords" content="Kubernetes">
+<meta property="og:type" content="article">
+<meta property="og:title" content="KubeController异步事件处理Infomer的实现">
+<meta property="og:url" content="http://yoursite.com/2018/01/10/KubeController异步事件处理Infomer的实现/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="前两年根据Kube-Infomer的框架，写过route-controller实现gorouter和kubenretes集群中应用路由的转发，还写过一个stack-controller实现AOS的堆栈管理，当时对照1.5和1.7版本的代码做了些总结。1.9之后informer已经完全迁移到client-go了，根据1.9的代码整理一遍框架的源码实现。informer作为异步事件处理框架，完成了事件">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2018/01/10/KubeController异步事件处理Infomer的实现/informer.jpg">
+<meta property="og:updated_time" content="2018-03-21T16:30:21.548Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="KubeController异步事件处理Infomer的实现">
+<meta name="twitter:description" content="前两年根据Kube-Infomer的框架，写过route-controller实现gorouter和kubenretes集群中应用路由的转发，还写过一个stack-controller实现AOS的堆栈管理，当时对照1.5和1.7版本的代码做了些总结。1.9之后informer已经完全迁移到client-go了，根据1.9的代码整理一遍框架的源码实现。informer作为异步事件处理框架，完成了事件">
+<meta name="twitter:image" content="http://yoursite.com/2018/01/10/KubeController异步事件处理Infomer的实现/informer.jpg">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2018/01/10/KubeController异步事件处理Infomer的实现/"/>
+
+
+
+
+
+  <title>KubeController异步事件处理Infomer的实现 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/01/10/KubeController异步事件处理Infomer的实现/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">KubeController异步事件处理Infomer的实现</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2018-01-10T17:55:44+08:00">
+                2018-01-10
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>前两年根据Kube-Infomer的框架，写过route-controller实现gorouter和kubenretes集群中应用路由的转发，还写过一个stack-controller实现AOS的堆栈管理，当时对照1.5和1.7版本的代码做了些总结。1.9之后informer已经完全迁移到client-go了，根据1.9的代码整理一遍框架的源码实现。informer作为异步事件处理框架，完成了事件监听和分发处理两个过程。</p>
+<p><img src="/2018/01/10/KubeController异步事件处理Infomer的实现/informer.jpg" alt="informer"></p>
+<ol>
+<li>监听通过controller中的Reflector实现，上一节记录过reflector如何将listWatcher得到的事件写到Store里，这里informer使用的Store是DeltaFIFO，它支持实现完全按事件发生顺序的分发处理。</li>
+<li>由Reflector生产的事件最终由processor消费。processor通过Pop队列里的事件，更新informer本地的indexer缓存，同时将事件distribute给所有的listerner。</li>
+<li>processor的listener由外部通过AddEventHandler注册，每个listener提供AddFunc UpdateFunc DeleteFunc方法。listener内部的实现加了一层缓存，用于存放pendingNotification。listerner最终实现了事件的分发，事件最终被注册的handler处理。</li>
+</ol>
+<h2 id="InfomerFactory"><a href="#InfomerFactory" class="headerlink" title="InfomerFactory"></a>InfomerFactory</h2><p>在DeploymentController初始化时，使用了PodInformer中的Lister()和Informer()，并通过AddEventHandler给Informer注册了事件分发处理的方式。Controller中使用的所有Informer都是从SharedInformerFactory中根据GroupVersionResource得到，同时informer的启动也是从这里开始start。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Run</span><span class="params">(c *config.CompletedConfig)</span> <span class="title">error</span></span> &#123; </span><br><span class="line">    sharedInformerFactory := informers.NewSharedInformerFactory(</span><br><span class="line">      verClient, ResyncPeriod)</span><br><span class="line">    <span class="comment">// startController</span></span><br><span class="line">    <span class="comment">// podInformer := sharedInformerFactory.Core().V1().Pods()</span></span><br><span class="line">    sharedInformerFactory.Start()</span><br><span class="line">    <span class="keyword">select</span> &#123;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Informer-Register"><a href="#Informer-Register" class="headerlink" title="Informer Register"></a>Informer Register</h3><p>informer的初始化通过client-go/tools/cache包提供的接口完成。而每个informer都通过其Informer接口实现向factory的注册。实际上一旦调用podInformer.Informer()就完成了注册，这是在startController中完成的，这之后就可以通过informerFactory.Start启动所有informer了。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewFilteredPodInformer</span><span class="params">(client kubernetes.Interface, namespace <span class="keyword">string</span>,</span></span></span><br><span class="line"><span class="function"><span class="params">     resyncPeriod time.Duration, indexers cache.Indexers,</span></span></span><br><span class="line"><span class="function"><span class="params">     /*tweakListOptions*/)</span> <span class="title">cache</span>.<span class="title">SharedIndexInformer</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> cache.NewSharedIndexInformer(</span><br><span class="line">      &amp;cache.ListWatch&#123;</span><br><span class="line">         ListFunc: <span class="function"><span class="keyword">func</span><span class="params">(options metav1.ListOptions)</span> <span class="params">(runtime.Object, error)</span></span> &#123;</span><br><span class="line">            <span class="keyword">return</span> client.CoreV1().Pods(namespace).List(options)</span><br><span class="line">         &#125;,</span><br><span class="line">         WatchFunc: <span class="function"><span class="keyword">func</span><span class="params">(options metav1.ListOptions)</span> <span class="params">(watch.Interface, error)</span></span> &#123;</span><br><span class="line">            <span class="keyword">return</span> client.CoreV1().Pods(namespace).Watch(options)</span><br><span class="line">         &#125;,</span><br><span class="line">        &#125;,</span><br><span class="line">        &amp;core_v1.Pod&#123;&#125;,</span><br><span class="line">        resyncPeriod,</span><br><span class="line">        indexers,</span><br><span class="line">    )</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(f *sharedInformerFactory)</span> <span class="title">InformerFor</span><span class="params">(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc)</span> <span class="title">cache</span>.<span class="title">SharedIndexInformer</span></span> &#123;</span><br><span class="line">    f.lock.Lock()</span><br><span class="line">    <span class="keyword">defer</span> f.lock.Unlock()</span><br><span class="line"></span><br><span class="line">    informerType := reflect.TypeOf(obj)</span><br><span class="line">    informer, exists := f.informers[informerType]</span><br><span class="line">    <span class="keyword">if</span> exists &#123;</span><br><span class="line">        <span class="keyword">return</span> informer</span><br><span class="line">    &#125;</span><br><span class="line">    informer = newFunc(f.client, f.defaultResync)</span><br><span class="line">    f.informers[informerType] = informer</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> informer</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Informer-Run"><a href="#Informer-Run" class="headerlink" title="Informer Run"></a>Informer Run</h3><p>最终informerFactory将注册到工厂的所有informer都启动，而informer启动后的工作就是事件监听和分发。<code>cache.WaitCacheSync</code>遍历所有informer看是否所有的informer都收到过事件，最终<code>HasSynced</code>的判断来自DeltaFIFO。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> sharedInformerFactory <span class="keyword">struct</span> &#123;</span><br><span class="line">    client        clientset.Interface</span><br><span class="line">    lock          sync.Mutex</span><br><span class="line">    defaultResync time.Duration</span><br><span class="line"></span><br><span class="line">    informers <span class="keyword">map</span>[reflect.Type]cache.SharedIndexInformer</span><br><span class="line">    startedInformers <span class="keyword">map</span>[reflect.Type]<span class="keyword">bool</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(f *sharedInformerFactory)</span> <span class="title">Start</span><span class="params">(stopCh &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    f.lock.Lock()</span><br><span class="line">    <span class="keyword">defer</span> f.lock.Unlock()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> informerType, informer := <span class="keyword">range</span> f.informers &#123;</span><br><span class="line">        <span class="keyword">if</span> !f.startedInformers[informerType] &#123;</span><br><span class="line">            <span class="keyword">go</span> informer.Run(stopCh)</span><br><span class="line">            f.startedInformers[informerType] = <span class="literal">true</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="SharedInformer"><a href="#SharedInformer" class="headerlink" title="SharedInformer"></a>SharedInformer</h2><p>informer作为异步事件处理框架，完成了事件监听和分发处理两个过程。成员中indexer是一个保存全量数据的缓存Store，informer对外提供的Lister通过Store完成，即Lister并没有直接操作etcd。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> sharedIndexInformer <span class="keyword">struct</span> &#123;</span><br><span class="line">    indexer    Indexer</span><br><span class="line">    controller Controller</span><br><span class="line"></span><br><span class="line">    processor             *sharedProcessor</span><br><span class="line">    cacheMutationDetector CacheMutationDetector</span><br><span class="line"></span><br><span class="line">    listerWatcher ListerWatcher</span><br><span class="line">    objectType    runtime.Object</span><br><span class="line"></span><br><span class="line">    resyncCheckPeriod time.Duration</span><br><span class="line">    defaultEventHandlerResyncPeriod time.Duration</span><br><span class="line">    clock clock.Clock</span><br><span class="line"></span><br><span class="line">    started, stopped <span class="keyword">bool</span></span><br><span class="line">    startedLock      sync.Mutex</span><br><span class="line"></span><br><span class="line">    blockDeltas sync.Mutex</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *sharedIndexInformer)</span> <span class="title">Run</span><span class="params">(stopCh &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> utilruntime.HandleCrash()</span><br><span class="line">    fifo := NewDeltaFIFO(MetaNamespaceKeyFunc, s.indexer)</span><br><span class="line">  </span><br><span class="line">    cfg := &amp;Config&#123;</span><br><span class="line">        Queue:            fifo,</span><br><span class="line">        ListerWatcher:    s.listerWatcher,</span><br><span class="line">        ObjectType:       s.objectType,</span><br><span class="line">        FullResyncPeriod: s.resyncCheckPeriod,</span><br><span class="line">        RetryOnError:     <span class="literal">false</span>,</span><br><span class="line">        ShouldResync:     s.processor.shouldResync,</span><br><span class="line">        Process: s.HandleDeltas,</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        s.startedLock.Lock()</span><br><span class="line">        <span class="keyword">defer</span> s.startedLock.Unlock()</span><br><span class="line"></span><br><span class="line">        s.controller = New(cfg)</span><br><span class="line">        s.controller.(*controller).clock = s.clock</span><br><span class="line">        s.started = <span class="literal">true</span></span><br><span class="line">    &#125;()</span><br><span class="line"></span><br><span class="line">    processorStopCh := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line">    <span class="keyword">var</span> wg wait.Group</span><br><span class="line">    <span class="keyword">defer</span> wg.Wait()              <span class="comment">// Wait for Processor to stop</span></span><br><span class="line">    <span class="keyword">defer</span> <span class="built_in">close</span>(processorStopCh) <span class="comment">// Tell Processor to stop</span></span><br><span class="line">    wg.StartWithChannel(processorStopCh, s.cacheMutationDetector.Run)</span><br><span class="line">    wg.StartWithChannel(processorStopCh, s.processor.run)</span><br><span class="line"></span><br><span class="line">    s.controller.Run(stopCh)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Controller"><a href="#Controller" class="headerlink" title="Controller"></a>Controller</h3><p>controller的Run主要是个生产者消费者模式，reflector是生产者，而controller的Process函数<code>s.HandleDeltas</code>是事件的消费者。在controller的processLoop中不断地调用reflector的store的Pop消费事件，事件最终由sharedIndexInformer的HandleDeltas处理。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *controller)</span> <span class="title">Run</span><span class="params">(stopCh &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        &lt;-stopCh</span><br><span class="line">        c.config.Queue.Close()</span><br><span class="line">    &#125;()</span><br><span class="line">    r := NewReflector(</span><br><span class="line">        c.config.ListerWatcher,</span><br><span class="line">        c.config.ObjectType,</span><br><span class="line">        c.config.Queue,</span><br><span class="line">        c.config.FullResyncPeriod,</span><br><span class="line">    )</span><br><span class="line">    <span class="keyword">var</span> wg wait.Group</span><br><span class="line">    <span class="keyword">defer</span> wg.Wait()</span><br><span class="line">    wg.StartWithChannel(stopCh, r.Run)</span><br><span class="line">    wait.Until(c.processLoop, time.Second, stopCh)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *controller)</span> <span class="title">processLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        obj, err := c.config.Queue.Pop(PopProcessFunc(c.config.Process))</span><br><span class="line">        <span class="comment">// handler err</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="DeltaFIFO"><a href="#DeltaFIFO" class="headerlink" title="DeltaFIFO"></a>DeltaFIFO</h3><p>在informer框架中DeltaFIFO作为Reflector的Store，根据list watch结果对Store进行Add/Update/Delete等操作。数据结构中最重要的是items和queue，其中items缓存了几乎所有add到FIFO中的事件，它以[]Delta的形式存储，而queue则是存储这些事件的id作为FIFO处理的先后顺序。</p>
+<blockquote>
+<p>跟UndeltaStore不同的是</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> DeltaFIFO <span class="keyword">struct</span> &#123;</span><br><span class="line">    lock sync.RWMutex</span><br><span class="line">    cond sync.Cond</span><br><span class="line"></span><br><span class="line">    <span class="comment">// We depend on the property that items in the set are in</span></span><br><span class="line">    <span class="comment">// the queue and vice versa, and that all Deltas in this</span></span><br><span class="line">    <span class="comment">// map have at least one Delta.</span></span><br><span class="line">    items <span class="keyword">map</span>[<span class="keyword">string</span>]Deltas</span><br><span class="line">    queue []<span class="keyword">string</span></span><br><span class="line"></span><br><span class="line">    populated <span class="keyword">bool</span></span><br><span class="line">    initialPopulationCount <span class="keyword">int</span></span><br><span class="line"></span><br><span class="line">    keyFunc KeyFunc</span><br><span class="line">    knownObjects KeyListerGetter</span><br><span class="line"></span><br><span class="line">    closed     <span class="keyword">bool</span></span><br><span class="line">    closedLock sync.Mutex</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>所有对Store的增删改都会经过下面的函数，它负责将这个obj入队，并存储到items缓存中，即使是删除事件也进入items事件中等到处理。当DeltaFIFO有新的内容加入后通过调用f.cond.BroadCast通知所有在f.cond.Wait中的goroutine可以去尝试Lock。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(f *DeltaFIFO)</span> <span class="title">queueActionLocked</span><span class="params">(actionType DeltaType, obj <span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    id, err := f.KeyOf(obj)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> KeyError&#123;obj, err&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> actionType == Sync &amp;&amp; f.willObjectBeDeletedLocked(id) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    newDeltas := <span class="built_in">append</span>(f.items[id], Delta&#123;actionType, obj&#125;)</span><br><span class="line">    newDeltas = dedupDeltas(newDeltas)</span><br><span class="line">    _, exists := f.items[id]</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(newDeltas) &gt; <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> !exists &#123;</span><br><span class="line">            f.queue = <span class="built_in">append</span>(f.queue, id)</span><br><span class="line">        &#125;</span><br><span class="line">        f.items[id] = newDeltas</span><br><span class="line">        f.cond.Broadcast()</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> exists &#123;</span><br><span class="line">        <span class="built_in">delete</span>(f.items, id)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>DeltaFIFO的生产者是Reflector，而消费者就是调用DeltaFIFO.Pop()的客户端。Pop方法的所有客户端都cond.Wait，但是只有当在cond.Wait中能真的获取到Lock才能从cond.Wait中返回。返回后取出queue的第一个id，在items获取该id对应的所有Delta事件，调用PopProcessFunc去处理。处理失败的item有可能再次加入队列。</p>
+<blockquote>
+<p>处理失败后如果后续已经有deltas在缓存里，这些item就舍弃了。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(f *DeltaFIFO)</span> <span class="title">Pop</span><span class="params">(process PopProcessFunc)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">    f.lock.Lock()</span><br><span class="line">    <span class="keyword">defer</span> f.lock.Unlock()</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">for</span> <span class="built_in">len</span>(f.queue) == <span class="number">0</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> f.IsClosed() &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="literal">nil</span>, FIFOClosedError</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            f.cond.Wait()</span><br><span class="line">        &#125;</span><br><span class="line">        id := f.queue[<span class="number">0</span>]</span><br><span class="line">        f.queue = f.queue[<span class="number">1</span>:]</span><br><span class="line">        item, ok := f.items[id]</span><br><span class="line">        <span class="keyword">if</span> f.initialPopulationCount &gt; <span class="number">0</span> &#123;</span><br><span class="line">            f.initialPopulationCount--</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> !ok &#123;</span><br><span class="line">            <span class="comment">// Item may have been deleted subsequently.</span></span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="built_in">delete</span>(f.items, id)</span><br><span class="line">        err := process(item)</span><br><span class="line">        <span class="keyword">if</span> e, ok := err.(ErrRequeue); ok &#123;</span><br><span class="line">            f.addIfNotPresent(id, item)</span><br><span class="line">            err = e.Err</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> item, err</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="ResourceEventHandler"><a href="#ResourceEventHandler" class="headerlink" title="ResourceEventHandler"></a>ResourceEventHandler</h3><p>通常往informer里添加的处理函数都满足以下接口，cache包里的ResourceEventHandlerFuncs刚好实现了这一组方法，因此只要注册AddFunc UpdatdFunc以及DeleteFunc即可。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ResourceEventHandler <span class="keyword">interface</span> &#123;</span><br><span class="line">    OnAdd(obj <span class="keyword">interface</span>&#123;&#125;)</span><br><span class="line">    OnUpdate(oldObj, newObj <span class="keyword">interface</span>&#123;&#125;)</span><br><span class="line">    OnDelete(obj <span class="keyword">interface</span>&#123;&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在informer里AddEventHandler时，实际是向informer的processor里添加了listener，这个processorListener通过add run pop三个基本方法对外提供事件分发处理的功能。下面是简化删减版的注册方法。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *sharedIndexInformer)</span> <span class="title">AddEventHandler</span><span class="params">(handler ResourceEventHandler, </span></span></span><br><span class="line"><span class="function"><span class="params">    resyncPeriod time.Duration)</span></span> &#123;</span><br><span class="line">    s.startedLock.Lock()</span><br><span class="line">    <span class="keyword">defer</span> s.startedLock.Unlock()</span><br><span class="line"></span><br><span class="line">    listener := newProcessListener(handler, resyncPeriod, </span><br><span class="line">       determineResyncPeriod(resyncPeriod, s.resyncCheckPeriod), </span><br><span class="line">       s.clock.Now(), initialBufferSize)</span><br><span class="line"></span><br><span class="line">    s.blockDeltas.Lock()</span><br><span class="line">    <span class="keyword">defer</span> s.blockDeltas.Unlock()</span><br><span class="line"></span><br><span class="line">    s.processor.addListener(listener)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="sharedProcessor"><a href="#sharedProcessor" class="headerlink" title="sharedProcessor"></a>sharedProcessor</h3><p>注册到controller里的处理函数是HandleDeltas，它主要通过processor分发事件。除了分发事件以外，处理函数会同时更新informer本地的store。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *sharedIndexInformer)</span> <span class="title">HandleDeltas</span><span class="params">(obj <span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    s.blockDeltas.Lock()</span><br><span class="line">    <span class="keyword">defer</span> s.blockDeltas.Unlock()</span><br><span class="line">    <span class="keyword">for</span> _, d := <span class="keyword">range</span> obj.(Deltas) &#123;</span><br><span class="line">        <span class="keyword">switch</span> d.Type &#123;</span><br><span class="line">        <span class="keyword">case</span> Sync, Added, Updated:</span><br><span class="line">            isSync := d.Type == Sync</span><br><span class="line">            s.cacheMutationDetector.AddObject(d.Object)</span><br><span class="line">            <span class="keyword">if</span> old, exists, err := s.indexer.Get(d.Object); err == <span class="literal">nil</span> &amp;&amp; exists &#123;</span><br><span class="line">                s.indexer.Update(d.Object)</span><br><span class="line">                s.processor.distribute(updateNotification&#123;oldObj: old, newObj: d.Object&#125;, isSync)</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                s.indexer.Add(d.Object)</span><br><span class="line">                s.processor.distribute(addNotification&#123;newObj: d.Object&#125;, isSync)</span><br><span class="line">            &#125;</span><br><span class="line">        <span class="keyword">case</span> Deleted:</span><br><span class="line">            s.indexer.Delete(d.Object)</span><br><span class="line">            s.processor.distribute(deleteNotification&#123;oldObj: d.Object&#125;, <span class="literal">false</span>)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在消费事件时，通过informer的processor进行distrubute。processor进行分发的处理函数由外部通过<code>AddEventHandler</code>，向processor里addListener。其中addListener只是增加一个processor管理的listener，并在分发时遍历listeners，将事件发给所有的listener。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> sharedProcessor <span class="keyword">struct</span> &#123;</span><br><span class="line">    listenersStarted <span class="keyword">bool</span></span><br><span class="line">    listenersLock    sync.RWMutex</span><br><span class="line">    listeners        []*processorListener</span><br><span class="line">    syncingListeners []*processorListener</span><br><span class="line">    clock            clock.Clock</span><br><span class="line">    wg               wait.Group</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *sharedProcessor)</span> <span class="title">distribute</span><span class="params">(obj <span class="keyword">interface</span>&#123;&#125;, sync <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">    p.listenersLock.RLock()</span><br><span class="line">    <span class="keyword">defer</span> p.listenersLock.RUnlock()</span><br><span class="line">    <span class="keyword">for</span> _, listener := <span class="keyword">range</span> p.listeners &#123;</span><br><span class="line">        listener.add(obj)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>processor的run保证所有listener都开始运行，并保证退出时所有listener的chan都关闭</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *sharedProcessor)</span> <span class="title">run</span><span class="params">(stopCh &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        p.listenersLock.RLock()</span><br><span class="line">        <span class="keyword">defer</span> p.listenersLock.RUnlock()</span><br><span class="line">        <span class="keyword">for</span> _, listener := <span class="keyword">range</span> p.listeners &#123;</span><br><span class="line">            p.wg.Start(listener.run)</span><br><span class="line">            p.wg.Start(listener.pop)</span><br><span class="line">        &#125;</span><br><span class="line">        p.listenersStarted = <span class="literal">true</span></span><br><span class="line">    &#125;()</span><br><span class="line">    &lt;-stopCh</span><br><span class="line">    p.listenersLock.RLock()</span><br><span class="line">    <span class="keyword">defer</span> p.listenersLock.RUnlock()</span><br><span class="line">    <span class="keyword">for</span> _, listener := <span class="keyword">range</span> p.listeners &#123;</span><br><span class="line">    <span class="comment">// Tell .pop() to stop. .pop() will tell .run() to stop</span></span><br><span class="line">        <span class="built_in">close</span>(listener.addCh) </span><br><span class="line">    &#125;</span><br><span class="line">    p.wg.Wait() <span class="comment">// Wait for all .pop() and .run() to stop</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="processorListener"><a href="#processorListener" class="headerlink" title="processorListener"></a>processorListener</h3><p>pendingNotifications装了所有还没分发的事件。其中处理事件processor开始distribute时，会调用listener的add方法，将事件发到addCh上。</p>
+<blockquote>
+<p>buffer.NewRingGrowing</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> processorListener <span class="keyword">struct</span> &#123;</span><br><span class="line">    nextCh <span class="keyword">chan</span> <span class="keyword">interface</span>&#123;&#125;</span><br><span class="line">    addCh  <span class="keyword">chan</span> <span class="keyword">interface</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line">    handler ResourceEventHandler</span><br><span class="line">    pendingNotifications buffer.RingGrowing</span><br><span class="line"></span><br><span class="line">    requestedResyncPeriod time.Duration</span><br><span class="line">    resyncPeriod time.Duration</span><br><span class="line">  </span><br><span class="line">    nextResync time.Time</span><br><span class="line">    resyncLock sync.Mutex</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *processorListener)</span> <span class="title">add</span><span class="params">(notification <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    p.addCh &lt;- notification</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>listener的pop goroutine不断地从addCh中获取事件，写到本地的pendingNotification或写给nextCh，而nextCh从本地pendingNotification或addCh获取事件。最后由run方法消费事件和分发事件。run方法支持指数重试，退出也会重新开始。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *processorListener)</span> <span class="title">pop</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> utilruntime.HandleCrash()</span><br><span class="line">    <span class="keyword">defer</span> <span class="built_in">close</span>(p.nextCh) <span class="comment">// Tell .run() to stop</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">var</span> nextCh <span class="keyword">chan</span>&lt;- <span class="keyword">interface</span>&#123;&#125;</span><br><span class="line">    <span class="keyword">var</span> notification <span class="keyword">interface</span>&#123;&#125;</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> nextCh &lt;- notification:</span><br><span class="line">            <span class="keyword">var</span> ok <span class="keyword">bool</span></span><br><span class="line">            notification, ok = p.pendingNotifications.ReadOne()</span><br><span class="line">            <span class="keyword">if</span> !ok &#123; </span><br><span class="line">                nextCh = <span class="literal">nil</span> </span><br><span class="line">            &#125;</span><br><span class="line">        <span class="keyword">case</span> notificationToAdd, ok := &lt;-p.addCh:</span><br><span class="line">            <span class="keyword">if</span> !ok &#123;</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> notification == <span class="literal">nil</span> &#123;</span><br><span class="line">                notification = notificationToAdd</span><br><span class="line">                nextCh = p.nextCh</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                p.pendingNotifications.WriteOne(notificationToAdd)</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *processorListener)</span> <span class="title">run</span><span class="params">()</span></span> &#123;</span><br><span class="line">    stopCh := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line">    wait.Until(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        err := wait.ExponentialBackoff(retry.DefaultRetry, <span class="function"><span class="keyword">func</span><span class="params">()</span> <span class="params">(<span class="keyword">bool</span>, error)</span></span> &#123;</span><br><span class="line">            <span class="keyword">for</span> next := <span class="keyword">range</span> p.nextCh &#123;</span><br><span class="line">                <span class="keyword">switch</span> notification := next.(<span class="keyword">type</span>) &#123;</span><br><span class="line">                <span class="keyword">case</span> updateNotification:</span><br><span class="line">                    p.handler.OnUpdate(notification.oldObj, notification.newObj)</span><br><span class="line">                <span class="keyword">case</span> addNotification:</span><br><span class="line">                    p.handler.OnAdd(notification.newObj)</span><br><span class="line">                <span class="keyword">case</span> deleteNotification:</span><br><span class="line">                    p.handler.OnDelete(notification.oldObj)</span><br><span class="line">                <span class="keyword">default</span>:</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">true</span>, <span class="literal">nil</span></span><br><span class="line">        &#125;)</span><br><span class="line">        <span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="built_in">close</span>(stopCh)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;, <span class="number">1</span>*time.Minute, stopCh)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="NewController"><a href="#NewController" class="headerlink" title="NewController"></a>NewController</h2><p>Kube-controller-manager是一个controller的集合，它实现了异步事件通知的一个通用框架，所有controller都以它为中心工作。以deploymentController为例记录下controller的实现逻辑。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">startDeploymentController</span><span class="params">(ctx ControllerContext)</span> <span class="params">(<span class="keyword">bool</span>, error)</span></span> &#123;</span><br><span class="line">    <span class="keyword">go</span> deployment.NewDeploymentController(</span><br><span class="line">        ctx.InformerFactory.Extensions().V1beta1().Deployments(),</span><br><span class="line">        ctx.InformerFactory.Extensions().V1beta1().ReplicaSets(),</span><br><span class="line">        ctx.InformerFactory.Core().V1().Pods(),</span><br><span class="line">        ctx.ClientBuilder.ClientOrDie(<span class="string">"deployment-controller"</span>),</span><br><span class="line">    ).Run(<span class="keyword">int</span>(ctx.Options.ConcurrentDeploymentSyncs), ctx.Stop)</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span>, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>DeploymentController的数据结构里listerSynced返回true表示这个lister已经至少开始工作了，Lister则是从informers的缓存中get数据的通道，rsControl提供一组操作RS的接口。节选一部分代码内容。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> DeploymentController <span class="keyword">struct</span> &#123;</span><br><span class="line">    rsControl     controller.RSControlInterface</span><br><span class="line">    client        clientset.Interface</span><br><span class="line">    eventRecorder record.EventRecorder</span><br><span class="line"></span><br><span class="line">    syncHandler <span class="function"><span class="keyword">func</span><span class="params">(dKey <span class="keyword">string</span>)</span> <span class="title">error</span></span></span><br><span class="line"><span class="function">    <span class="title">enqueueDeployment</span> <span class="title">func</span><span class="params">(deployment *extensions.Deployment)</span></span></span><br><span class="line"><span class="function">  </span></span><br><span class="line"><span class="function">    <span class="title">dLister</span> <span class="title">extensionslisters</span>.<span class="title">DeploymentLister</span></span></span><br><span class="line"><span class="function">    <span class="title">dListerSynced</span> <span class="title">cache</span>.<span class="title">InformerSynced</span></span></span><br><span class="line"><span class="function">    <span class="title">queue</span> <span class="title">workqueue</span>.<span class="title">RateLimitingInterface</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="title">NewDeploymentController</span><span class="params">(dInformer extensionsinformers.DeploymentInformer,</span></span></span><br><span class="line"><span class="function"><span class="params">     rsInformer extensionsinformers.ReplicaSetInformer, </span></span></span><br><span class="line"><span class="function"><span class="params">     podInformer coreinformers.PodInformer, </span></span></span><br><span class="line"><span class="function"><span class="params">     client clientset.Interface)</span> *<span class="title">DeploymentController</span></span> &#123;</span><br><span class="line">    dc := &amp;DeploymentController&#123;</span><br><span class="line">        client:        client,</span><br><span class="line">        queue:         workqueue.NewNamedRateLimitingQueue(</span><br><span class="line">          workqueue.DefaultControllerRateLimiter(), <span class="string">"deployment"</span>),</span><br><span class="line">    &#125;</span><br><span class="line">    dc.rsControl = controller.RealRSControl&#123;</span><br><span class="line">        KubeClient: client,</span><br><span class="line">        Recorder:   dc.eventRecorder,</span><br><span class="line">    &#125;</span><br><span class="line">    dInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs&#123;</span><br><span class="line">        AddFunc:    dc.addDeployment,</span><br><span class="line">        UpdateFunc: dc.updateDeployment,</span><br><span class="line">        DeleteFunc: dc.deleteDeployment,</span><br><span class="line">    &#125;)</span><br><span class="line"></span><br><span class="line">    dc.syncHandler = dc.syncDeployment</span><br><span class="line">    dc.enqueueDeployment = dc.enqueue</span><br><span class="line">    dc.dLister = dInformer.Lister()</span><br><span class="line">    dc.dListerSynced = dInformer.Informer().HasSynced</span><br><span class="line">    <span class="keyword">return</span> dc</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Controller.Run的过程首先等待所有informer都工作之后，开始并发的起N个goroutine来处理事件分发。这个goroutine循环处理一个事情，就是从queue里拿任务交给syncHandler处理。</p>
+<blockquote>
+<p>queue何时退出</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dc *DeploymentController)</span> <span class="title">Run</span><span class="params">(workers <span class="keyword">int</span>, stopCh &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> utilruntime.HandleCrash()</span><br><span class="line">    <span class="keyword">defer</span> dc.queue.ShutDown()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> !controller.WaitForCacheSync(<span class="string">"deployment"</span>, stopCh, dc.dListerSynced, </span><br><span class="line">        dc.rsListerSynced, dc.podListerSynced) &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> i := <span class="number">0</span>; i &lt; workers; i++ &#123;</span><br><span class="line">        <span class="keyword">go</span> wait.Until(dc.worker, time.Second, stopCh)</span><br><span class="line">    &#125;</span><br><span class="line">    &lt;-stopCh</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dc *DeploymentController)</span> <span class="title">worker</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> dc.processNextWorkItem() &#123;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dc *DeploymentController)</span> <span class="title">processNextWorkItem</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    key, quit := dc.queue.Get()</span><br><span class="line">    <span class="keyword">if</span> quit &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">defer</span> dc.queue.Done(key)</span><br><span class="line">    err := dc.syncHandler(key.(<span class="keyword">string</span>))</span><br><span class="line">    dc.handleErr(err, key)</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>queue当中的事件是如何进队的呢，通过注册到informer上的eventHandler处理的，比如当有新的deployment创建时，最终将要处理的deployment的key进队。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dc *DeploymentController)</span> <span class="title">addDeployment</span><span class="params">(obj <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    d := obj.(*extensions.Deployment)</span><br><span class="line">    dc.enqueueDeployment(d)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dc *DeploymentController)</span> <span class="title">enqueue</span><span class="params">(deployment *extensions.Deployment)</span></span> &#123;</span><br><span class="line">    key, err := controller.KeyFunc(deployment)</span><br><span class="line">    <span class="comment">// process error</span></span><br><span class="line">    dc.queue.Add(key)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Question"><a href="#Question" class="headerlink" title="Question"></a>Question</h2><ol>
+<li>为什么kubelet使用的UndeltaStore 而controller使用informer</li>
+<li>sharedInformer的shared体现在缓存indexer是公用的吗</li>
+<li>listerner使用的buffer作用</li>
+<li>controller中的queue如何做到限流</li>
+</ol>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><p><a href="http://blog.csdn.net/qq_32292967/article/details/76020048" target="_blank" rel="noopener">sync.Cond的源码观察</a></p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/01/09/Kubelet数据源的合并/" rel="next" title="Kubelet数据源的合并">
+                <i class="fa fa-chevron-left"></i> Kubelet数据源的合并
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/02/18/IO多路复用与Go网络库的实现/" rel="prev" title="IO多路复用与Go网络库的实现">
+                IO多路复用与Go网络库的实现 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/nino.jpg"
+                alt="nino" />
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">25</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/ninokop" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="http://weibo.com/u/1732126300" target="_blank" title="WeiBo">
+                    
+                      <i class="fa fa-fw fa-globe"></i>WeiBo</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#InfomerFactory"><span class="nav-number">1.</span> <span class="nav-text">InfomerFactory</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Informer-Register"><span class="nav-number">1.1.</span> <span class="nav-text">Informer Register</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Informer-Run"><span class="nav-number">1.2.</span> <span class="nav-text">Informer Run</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#SharedInformer"><span class="nav-number">2.</span> <span class="nav-text">SharedInformer</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Controller"><span class="nav-number">2.1.</span> <span class="nav-text">Controller</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#DeltaFIFO"><span class="nav-number">2.2.</span> <span class="nav-text">DeltaFIFO</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ResourceEventHandler"><span class="nav-number">2.3.</span> <span class="nav-text">ResourceEventHandler</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#sharedProcessor"><span class="nav-number">2.4.</span> <span class="nav-text">sharedProcessor</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#processorListener"><span class="nav-number">2.5.</span> <span class="nav-text">processorListener</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#NewController"><span class="nav-number">3.</span> <span class="nav-text">NewController</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Question"><span class="nav-number">4.</span> <span class="nav-text">Question</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference"><span class="nav-number">5.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.3</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

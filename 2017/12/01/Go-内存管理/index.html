@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Golang," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="内存管理缓存结构Go实现的内存管理采用了tcmalloc这种架构，并配合goroutine和垃圾回收。tcmalloc的基本策略就是将内存分为多个级别。申请对象优先从最小级别的内存管理集合mcache中获取，若mcache无法命中则需要向mcentral申请一批内存块缓存到本地mcache中，若mcentral无空闲的内存块，则向mheap申请来填充mcentral，最后向系统申请。 mcache">
+<meta name="keywords" content="Golang">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Go 内存管理">
+<meta property="og:url" content="http://yoursite.com/2017/12/01/Go-内存管理/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="内存管理缓存结构Go实现的内存管理采用了tcmalloc这种架构，并配合goroutine和垃圾回收。tcmalloc的基本策略就是将内存分为多个级别。申请对象优先从最小级别的内存管理集合mcache中获取，若mcache无法命中则需要向mcentral申请一批内存块缓存到本地mcache中，若mcentral无空闲的内存块，则向mheap申请来填充mcentral，最后向系统申请。 mcache">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2017/12/01/Go-内存管理/goalloc.png">
+<meta property="og:updated_time" content="2018-04-27T01:39:54.920Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Go 内存管理">
+<meta name="twitter:description" content="内存管理缓存结构Go实现的内存管理采用了tcmalloc这种架构，并配合goroutine和垃圾回收。tcmalloc的基本策略就是将内存分为多个级别。申请对象优先从最小级别的内存管理集合mcache中获取，若mcache无法命中则需要向mcentral申请一批内存块缓存到本地mcache中，若mcentral无空闲的内存块，则向mheap申请来填充mcentral，最后向系统申请。 mcache">
+<meta name="twitter:image" content="http://yoursite.com/2017/12/01/Go-内存管理/goalloc.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2017/12/01/Go-内存管理/"/>
+
+
+
+
+
+  <title>Go 内存管理 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/12/01/Go-内存管理/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Go 内存管理</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2017-12-01T19:56:52+08:00">
+                2017-12-01
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Golang/" itemprop="url" rel="index">
+                    <span itemprop="name">Golang</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h2 id="内存管理缓存结构"><a href="#内存管理缓存结构" class="headerlink" title="内存管理缓存结构"></a>内存管理缓存结构</h2><p>Go实现的内存管理采用了<strong>tcmalloc</strong>这种架构，并配合goroutine和垃圾回收。<strong>tcmalloc的基本策略</strong>就是将内存分为多个级别。申请对象优先从最小级别的内存管理集合<code>mcache</code>中获取，若mcache无法命中则需要向mcentral申请一批内存块缓存到本地mcache中，若<code>mcentral</code>无空闲的内存块，则向<code>mheap</code>申请来填充mcentral，最后向系统申请。</p>
+<h3 id="mcache-mspan"><a href="#mcache-mspan" class="headerlink" title="mcache + mspan"></a>mcache + mspan</h3><p>最小级别的<strong>内存块管理集合</strong><code>mcache</code>由goroutine自己维护，这样从中申请内存不用加锁。它是一个大小为67的数组，不同的index对应不同规格的<code>mspan</code>。<code>newobject</code>的时候通过<code>sizetoclass</code>计算对应的规格，然后在mcache中获取mspan对象。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> mcache <span class="keyword">struct</span> &#123;</span><br><span class="line">    alloc [_NumSizeClasses]*mspan <span class="comment">// spans to allocate from</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>mspan</code>包含着一批大小相同的空闲的<code>object</code>，由freelist指针查找。<strong>mspan内部的object是连续内存块，即连续的n个page(4KB)的连续内存空间。然后这块空间被平均分成了规格相同的object，这些object又连接成链表</strong>。当newobject时找到mcache中对应规格的mspan，从它的freelist取一个object即可。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> mspan <span class="keyword">struct</span> &#123;</span><br><span class="line">    next     *mspan    <span class="comment">// in a span linked list</span></span><br><span class="line">    prev     *mspan    <span class="comment">// in a span linked list</span></span><br><span class="line">    start    pageID    <span class="comment">// starting page number</span></span><br><span class="line">    npages   <span class="keyword">uintptr</span>   <span class="comment">// number of pages in span</span></span><br><span class="line">    freelist gclinkptr <span class="comment">// list of free objects</span></span><br><span class="line">    sizeclass   <span class="keyword">uint8</span>    <span class="comment">// size class</span></span><br><span class="line">    incache     <span class="keyword">bool</span>     <span class="comment">// being used by an mcache</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="mheap-mcentral"><a href="#mheap-mcentral" class="headerlink" title="mheap + mcentral"></a>mheap + mcentral</h3><p>如果某个规格的span里已经没有freeObject了 需要从<code>mcentral</code>当中<strong>获取这种规格的mspan</strong>。正好mcentral也是按照class规格存储在数组中，只要按规格去<code>mheap</code>的mcentral数组取mspan就好。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 某种规格的mspan正好对应一个mcentral</span></span><br><span class="line"><span class="keyword">type</span> mcentral <span class="keyword">struct</span> &#123;</span><br><span class="line">    lock      mutex</span><br><span class="line">    sizeclass <span class="keyword">int32</span></span><br><span class="line">    nonempty  mspan <span class="comment">//还有空闲object的mspan</span></span><br><span class="line">    empty     mspan <span class="comment">//没有空闲object或已被cache取走的mspan</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果central数组中这种规格的mcentral没有freeSpan了，则需要从<code>mheap</code>的<code>free</code>数组获取。这里规格并不对齐，所以应该要重新切分成相应规格的mspan。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> mheap <span class="keyword">struct</span> &#123;</span><br><span class="line">    lock      mutex</span><br><span class="line">    free      [_MaxMHeapList]mspan <span class="comment">// 页数在127以内的空闲span链表</span></span><br><span class="line">    freelarge mspan            </span><br><span class="line">    spans        **mspan</span><br><span class="line"> </span><br><span class="line">    bitmap         <span class="keyword">uintptr</span></span><br><span class="line">    bitmap_mapped  <span class="keyword">uintptr</span></span><br><span class="line">    arena_start    <span class="keyword">uintptr</span></span><br><span class="line">    arena_used     <span class="keyword">uintptr</span> </span><br><span class="line">    arena_end      <span class="keyword">uintptr</span></span><br><span class="line">    arena_reserved <span class="keyword">bool</span></span><br><span class="line"></span><br><span class="line">    central [_NumSizeClasses]<span class="keyword">struct</span> &#123;</span><br><span class="line">        mcentral mcentral</span><br><span class="line">        pad      [_CacheLineSize]<span class="keyword">byte</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    spanalloc             fixalloc <span class="comment">// allocator for span*</span></span><br><span class="line">    cachealloc            fixalloc <span class="comment">// allocator for mcache*</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="内存的初始化"><a href="#内存的初始化" class="headerlink" title="内存的初始化"></a>内存的初始化</h2><p>很早之前看过这个图，当时对他的理解有误，因为看漏了一句话 <code>struct Mcache alloc from &#39;cachealloc&#39; by FixAlloc</code>。就是说用户进程newobject是从下图的arena区域分配的，而runtime层自身管理的结构 比如mcache等是专门设计了fixAlloc来分配的，原因可能是这些runtime层的管理对象类型和长度都相对固定，而且生命周期很长，不适合占用arena区域。</p>
+<p><img src="/2017/12/01/Go-内存管理/goalloc.png" style="zoom:40%"></p>
+<h3 id="mallocinit"><a href="#mallocinit" class="headerlink" title="mallocinit"></a>mallocinit</h3><p>通过<code>sysReserve</code> 向系统申请一块连续的内存 <strong>spans+bitmap+arena</strong>。其中arena为各个级别缓存结构提供的分配的内存块，spans是个指针数组用来按照page寻址arena区域。</p>
+<blockquote>
+<p>最终sysReserve调用的是系统调用<code>mmap</code>。申请了512GB的虚拟地址空间，真正的物理内存则是用到的时候发生缺页才真实占用的。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">mallocinit</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="comment">// 初始化规格class和size的对照方法</span></span><br><span class="line">    initSizes()</span><br><span class="line">    <span class="keyword">if</span> ptrSize == <span class="number">8</span> &amp;&amp; (limit == <span class="number">0</span> || limit &gt; <span class="number">1</span>&lt;&lt;<span class="number">30</span>) &#123;</span><br><span class="line">        arenaSize := round(_MaxMem, _PageSize)</span><br><span class="line">        bitmapSize = arenaSize / (ptrSize * <span class="number">8</span> / <span class="number">4</span>)</span><br><span class="line">        spansSize = arenaSize / _PageSize * ptrSize</span><br><span class="line">        pSize = bitmapSize + spansSize + arenaSize + _PageSize</span><br><span class="line">        p1 = <span class="keyword">uintptr</span>(sysReserve(unsafe.Pointer(p), pSize, &amp;reserved))</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    mheap_.spans = (**mspan)(unsafe.Pointer(p1))</span><br><span class="line">    mheap_.bitmap = p1 + spansSize</span><br><span class="line">    mheap_.arena_start = p1 + (spansSize + bitmapSize)</span><br><span class="line">    mheap_.arena_used = mheap_.arena_start</span><br><span class="line">    mheap_.arena_end = p + pSize</span><br><span class="line">    mheap_.arena_reserved = reserved</span><br><span class="line"></span><br><span class="line">    mHeap_Init(&amp;mheap_, spansSize)</span><br><span class="line">    _g_ := getg()</span><br><span class="line">    _g_.m.mcache = allocmcache()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>mheap初始化相关指针，使之可以寻址arena这块内存。同时初始化<strong>cachealloc</strong>这个固定分配器。最后执行的   <code>m.mcache = allocmcache()</code> 是每个gouroutine创建时都要初始化的。直到这时才真正创建了<code>mcache</code>，并且初始化mcache里整个数组对应的mspan为emptyspan。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *mheap)</span> <span class="title">init</span><span class="params">(spansStart, spansBytes <span class="keyword">uintptr</span>)</span></span> &#123;</span><br><span class="line">    h.spanalloc.init(unsafe.Sizeof(mspan&#123;&#125;), recordspan, unsafe.Pointer(h), &amp;memstats.mspan_sys)</span><br><span class="line">    h.cachealloc.init(unsafe.Sizeof(mcache&#123;&#125;), <span class="literal">nil</span>, <span class="literal">nil</span>, &amp;memstats.mcache_sys)</span><br><span class="line">    h.spanalloc.zero = <span class="literal">false</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">range</span> h.free &#123;</span><br><span class="line">        h.free[i].init()</span><br><span class="line">        h.busy[i].init()</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    h.freelarge.init()</span><br><span class="line">    h.busylarge.init()</span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">range</span> h.central &#123;</span><br><span class="line">        h.central[i].mcentral.init(<span class="keyword">int32</span>(i))</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    sp := (*slice)(unsafe.Pointer(&amp;h.spans))</span><br><span class="line">    sp.array = unsafe.Pointer(spansStart)</span><br><span class="line">    sp.<span class="built_in">len</span> = <span class="number">0</span></span><br><span class="line">    sp.<span class="built_in">cap</span> = <span class="keyword">int</span>(spansBytes / sys.PtrSize)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">allocmcache</span><span class="params">()</span> *<span class="title">mcache</span></span> &#123;</span><br><span class="line">    <span class="comment">// lock and fixalloc mcache</span></span><br><span class="line">    c := (*mcache)(mheap_.cachealloc.alloc())</span><br><span class="line">    <span class="keyword">for</span> i := <span class="number">0</span>; i &lt; _NumSizeClasses; i++ &#123;</span><br><span class="line">        c.alloc[i] = &amp;emptymspan</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> c</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="fixalloc"><a href="#fixalloc" class="headerlink" title="fixalloc"></a>fixalloc</h3><p>fixalloc分配器通过init初始化每次分配的size。chunk是每次分配的固定大小的内存块，list是内存块链表。<strong>当fixalloc初始化为cachealloc时，每次调用alloc就分配一块mcache</strong>。persistantalloc看起来是runtime有个全局存储的后备内存的地方，优先从这儿取没有再从系统mmap一块。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> fixalloc <span class="keyword">struct</span> &#123;</span><br><span class="line">    size   <span class="keyword">uintptr</span></span><br><span class="line">    first  <span class="function"><span class="keyword">func</span><span class="params">(arg, p unsafe.Pointer)</span></span></span><br><span class="line"><span class="function">    <span class="title">arg</span>    <span class="title">unsafe</span>.<span class="title">Pointer</span></span></span><br><span class="line"><span class="function">    <span class="title">list</span>   *<span class="title">mlink</span></span></span><br><span class="line"><span class="function">    <span class="title">chunk</span>  <span class="title">unsafe</span>.<span class="title">Pointer</span></span></span><br><span class="line"><span class="function">    <span class="title">nchunk</span> <span class="title">uint32</span></span></span><br><span class="line"><span class="function">    <span class="title">inuse</span>  <span class="title">uintptr</span> // <span class="title">in</span>-<span class="title">use</span> <span class="title">bytes</span> <span class="title">now</span></span></span><br><span class="line"><span class="function">    <span class="title">stat</span>   *<span class="title">uint64</span></span></span><br><span class="line"><span class="function">    <span class="title">zero</span>   <span class="title">bool</span> // <span class="title">zero</span> <span class="title">allocations</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(f *fixalloc)</span> <span class="title">alloc</span><span class="params">()</span> <span class="title">unsafe</span>.<span class="title">Pointer</span></span> &#123;</span><br><span class="line">    <span class="comment">// 优先从可复用链表中获取对象块</span></span><br><span class="line">    <span class="keyword">if</span> f.list != <span class="literal">nil</span> &#123;</span><br><span class="line">        f.list = f.list.next</span><br><span class="line">        <span class="keyword">return</span> v</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 如果没有从系统申请chunk大小的内存块</span></span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">uintptr</span>(f.nchunk) &lt; f.size &#123;</span><br><span class="line">        f.chunk = persistentalloc(_FixAllocChunk, <span class="number">0</span>, f.stat)</span><br><span class="line">    &#125;</span><br><span class="line">    v := f.chunk</span><br><span class="line">    <span class="comment">// 为调用方提供了fist函数作为hook点</span></span><br><span class="line">    <span class="keyword">return</span> v</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="内存分配"><a href="#内存分配" class="headerlink" title="内存分配"></a>内存分配</h2><h3 id="mallocgc"><a href="#mallocgc" class="headerlink" title="mallocgc"></a>mallocgc</h3><p>以下总结了malloc的流程，基本普通的小对象都是从mcache中找到相应规格的mspan，在其中的freelist上拿到object对象内存块。<code>nextfree</code>中隐藏了整个内存数据块的查找和流向。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">mallocgc</span><span class="params">(size <span class="keyword">uintptr</span>, typ *_type, needzero <span class="keyword">bool</span>)</span> <span class="title">unsafe</span>.<span class="title">Pointer</span></span> &#123;</span><br><span class="line">    c := gomcache()</span><br><span class="line">    <span class="keyword">if</span> size &lt;= maxSmallSize &#123;</span><br><span class="line">        <span class="comment">// size小于16bit的不用扫描的对象 直接从mcache的tiny上分</span></span><br><span class="line">        <span class="keyword">if</span> noscan &amp;&amp; size &lt; maxTinySize &#123;</span><br><span class="line">            off := c.tinyoffset</span><br><span class="line">            <span class="keyword">if</span> off+size &lt;= maxTinySize &amp;&amp; c.tiny != <span class="number">0</span> &#123;</span><br><span class="line">                x = unsafe.Pointer(c.tiny + off)</span><br><span class="line">                <span class="keyword">return</span> x</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">// 若没有tiny了则从mcache的中相应规格的mspan查找</span></span><br><span class="line">            span := c.alloc[tinySizeClass]</span><br><span class="line">            v, _, shouldhelpgc = c.nextFree(tinySizeClass)</span><br><span class="line">            x = unsafe.Pointer(v)</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// 普通小于4KB小对象先计算规格</span></span><br><span class="line">            span := c.alloc[sizeclass]</span><br><span class="line">            v, span, shouldhelpgc = c.nextFree(sizeclass)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">         <span class="comment">// 大对象直接从heap分配span</span></span><br><span class="line">        systemstack(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">            s = largeAlloc(size, needzero)</span><br><span class="line">        &#125;)</span><br><span class="line">        x = unsafe.Pointer(s.base())</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> x</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *mcache)</span> <span class="title">nextFree</span><span class="params">(sizeclass <span class="keyword">uint8</span>)</span> <span class="params">(v gclinkptr, </span></span></span><br><span class="line"><span class="function"><span class="params">s *mspan, shouldhelpgc <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">    s = c.alloc[sizeclass]</span><br><span class="line">    freeIndex := s.nextFreeIndex()</span><br><span class="line">    <span class="keyword">if</span> freeIndex == s.nelems &#123;</span><br><span class="line">        systemstack(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">            c.refill(<span class="keyword">int32</span>(sizeclass))</span><br><span class="line">        &#125;)</span><br><span class="line">        s = c.alloc[sizeclass]</span><br><span class="line">        freeIndex = s.nextFreeIndex()</span><br><span class="line">    &#125;</span><br><span class="line">    v = gclinkptr(freeIndex*s.elemsize + s.base())</span><br><span class="line">    <span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="refill-cachespan"><a href="#refill-cachespan" class="headerlink" title="refill + cachespan"></a>refill + cachespan</h3><p>如果<code>nextfree</code>在mcache相应规格的mspan里拿不到object那么需要从mcentral中<code>refill</code>内存块。</p>
+<blockquote>
+<p>这里面有个细节要将alloc中原本已经没有可用object的这块mspan还给central，应该要放进central的empty链表中。这里只是把相应的mspan的incache设置为false，等待sweep的回收。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *mcache)</span> <span class="title">refill</span><span class="params">(sizeclass <span class="keyword">int32</span>)</span> *<span class="title">mspan</span></span> &#123;</span><br><span class="line">    s := c.alloc[sizeclass]</span><br><span class="line">    <span class="keyword">if</span> s != &amp;emptymspan &#123;</span><br><span class="line">        s.incache = <span class="literal">false</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    s = mheap_.central[sizeclass].mcentral.cacheSpan()</span><br><span class="line">    c.alloc[sizeclass] = s</span><br><span class="line">    <span class="keyword">return</span> s</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>sweepgen是个回收标记，当sweepgen=sg-2时表示等待回收，sweepgen-1表示正在回收，sweepgen表示已经回收。<strong>从mcentral中获取mspan时有可能当前的span正在等待或正在回收，我们把等待回收的mspan可以返回用来refill mcache，因此将它insert到empty链表中。</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *mcentral)</span> <span class="title">cacheSpan</span><span class="params">()</span> *<span class="title">mspan</span></span> &#123;</span><br><span class="line">    sg := mheap_.sweepgen</span><br><span class="line">retry:</span><br><span class="line">    <span class="keyword">var</span> s *mspan</span><br><span class="line">    <span class="keyword">for</span> s = c.nonempty.first; s != <span class="literal">nil</span>; s = s.next &#123;</span><br><span class="line">        <span class="keyword">if</span> s.sweepgen == sg<span class="number">-2</span> &amp;&amp; atomic.Cas(&amp;s.sweepgen, sg<span class="number">-2</span>, sg<span class="number">-1</span>) &#123;</span><br><span class="line">            <span class="comment">// 等待回收 可以返回使用</span></span><br><span class="line">            c.nonempty.remove(s)</span><br><span class="line">            c.empty.insertBack(s)</span><br><span class="line">            s.sweep(<span class="literal">true</span>)</span><br><span class="line">            <span class="keyword">goto</span> havespan</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> s.sweepgen == sg<span class="number">-1</span> &#123;</span><br><span class="line">            <span class="comment">// 正在回收 忽略</span></span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line">        c.nonempty.remove(s)</span><br><span class="line">        c.empty.insertBack(s)</span><br><span class="line">        <span class="keyword">goto</span> havespan</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> s = c.empty.first; s != <span class="literal">nil</span>; s = s.next &#123;...&#125;</span><br><span class="line"></span><br><span class="line">    s = c.grow()</span><br><span class="line">    c.empty.insertBack(s)</span><br><span class="line">havespan:</span><br><span class="line">    ...</span><br><span class="line">    <span class="keyword">return</span> s</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="mcentral-grow"><a href="#mcentral-grow" class="headerlink" title="mcentral grow"></a>mcentral grow</h3><p>如果mcentral中没有mspan可以用 那么需要grow，即从mheap中获取。<strong>要计算出当前规格对应的page数目，从mheap中直接去nPage的mspan。</strong>free区域是个指针数组，每个指针对应一个mspan的链表，数组按照npage寻址。<strong>若大于要求的npage的链表中 都没有空闲mspan，则mheap也需要扩张。</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *mcentral)</span> <span class="title">grow</span><span class="params">()</span> *<span class="title">mspan</span></span> &#123;</span><br><span class="line">    npages := <span class="keyword">uintptr</span>(class_to_allocnpages[c.sizeclass])</span><br><span class="line">    size := <span class="keyword">uintptr</span>(class_to_size[c.sizeclass])</span><br><span class="line">    n := (npages &lt;&lt; _PageShift) / size</span><br><span class="line"></span><br><span class="line">    s := mheap_.alloc(npages, c.sizeclass, <span class="literal">false</span>, <span class="literal">true</span>)</span><br><span class="line">    heapBitsForSpan(s.base()).initSpan(s)</span><br><span class="line">    <span class="keyword">return</span> s</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *mheap)</span> <span class="title">allocSpanLocked</span><span class="params">(npage <span class="keyword">uintptr</span>)</span> *<span class="title">mspan</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">int</span>(npage); i &lt; <span class="built_in">len</span>(h.free); i++ &#123;</span><br><span class="line">        list = &amp;h.free[i]</span><br><span class="line">        <span class="keyword">if</span> !list.isEmpty() &#123;</span><br><span class="line">            s = list.first</span><br><span class="line">            <span class="keyword">goto</span> HaveSpan</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    list = &amp;h.freelarge</span><br><span class="line">    s = h.allocLarge(npage)</span><br><span class="line">    <span class="keyword">if</span> s == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> !h.grow(npage) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">        &#125;</span><br><span class="line">        s = h.allocLarge(npage)</span><br><span class="line">    &#125;</span><br><span class="line">HaveSpan:</span><br><span class="line">    <span class="comment">// Mark span in use.</span></span><br><span class="line">    <span class="keyword">return</span> s</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="mheap-grow"><a href="#mheap-grow" class="headerlink" title="mheap grow"></a>mheap grow</h3><p>mheap的扩张<code>h.sysAlloc</code>直接向arena区域申请nbytes的内存，数目按照npage大小计算。arena区域的一些指针标记开始移动，最终将mspan加入链表，等待分配。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *mheap)</span> <span class="title">grow</span><span class="params">(npage <span class="keyword">uintptr</span>)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    ask := npage &lt;&lt; _PageShift</span><br><span class="line">    v := h.sysAlloc(ask)</span><br><span class="line"></span><br><span class="line">    s := (*mspan)(h.spanalloc.alloc())</span><br><span class="line">    s.init(<span class="keyword">uintptr</span>(v), ask&gt;&gt;_PageShift)</span><br><span class="line">    p := (s.base() - h.arena_start) &gt;&gt; _PageShift</span><br><span class="line">    <span class="keyword">for</span> i := p; i &lt; p+s.npages; i++ &#123;</span><br><span class="line">        h.spans[i] = s</span><br><span class="line">    &#125;</span><br><span class="line">    atomic.Store(&amp;s.sweepgen, h.sweepgen)</span><br><span class="line">    s.state = _MSpanInUse</span><br><span class="line">    h.pagesInUse += <span class="keyword">uint64</span>(s.npages)</span><br><span class="line">    <span class="comment">// 加入链表</span></span><br><span class="line">    h.freeSpanLocked(s, <span class="literal">false</span>, <span class="literal">true</span>, <span class="number">0</span>)</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="内存回收与释放"><a href="#内存回收与释放" class="headerlink" title="内存回收与释放"></a>内存回收与释放</h2><p>简单说两句：mspan里有sweepgen回收标记，回收的内存会先全部回到mcentral。如果已经回收所有的mspan那么可以返还给mheap的freelist。回收的内存块当然是为了复用，并不直接释放。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *mspan)</span> <span class="title">sweep</span><span class="params">(preserve <span class="keyword">bool</span>)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    res = mheap_.central[cl].mcentral.freeSpan(s, preserve, wasempty)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *mcentral)</span> <span class="title">freeSpan</span><span class="params">(s *mspan, preserve <span class="keyword">bool</span>, </span></span></span><br><span class="line"><span class="function"><span class="params">wasempty <span class="keyword">bool</span>)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> wasempty &#123;</span><br><span class="line">        c.empty.remove(s)</span><br><span class="line">        c.nonempty.insert(s)</span><br><span class="line">    &#125;</span><br><span class="line">  ...</span><br><span class="line">    c.nonempty.remove(s)</span><br><span class="line">    mheap_.freeSpan(s, <span class="number">0</span>)</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>监控线程<strong>sysmon</strong>又出现了，它会遍历mheap中所有的free freelarge里的mspan，发现空闲时间超过阈值就<code>madvise</code>建议内核释放它相关的物理内存。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Golang/" rel="tag"># Golang</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/11/24/Hystrix-go实现/" rel="next" title="Hystrix-go实现">
+                <i class="fa fa-chevron-left"></i> Hystrix-go实现
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/12/07/Go-垃圾回收/" rel="prev" title="Go 垃圾回收">
+                Go 垃圾回收 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/nino.jpg"
+                alt="nino" />
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">25</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/ninokop" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="http://weibo.com/u/1732126300" target="_blank" title="WeiBo">
+                    
+                      <i class="fa fa-fw fa-globe"></i>WeiBo</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#内存管理缓存结构"><span class="nav-number">1.</span> <span class="nav-text">内存管理缓存结构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#mcache-mspan"><span class="nav-number">1.1.</span> <span class="nav-text">mcache + mspan</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#mheap-mcentral"><span class="nav-number">1.2.</span> <span class="nav-text">mheap + mcentral</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#内存的初始化"><span class="nav-number">2.</span> <span class="nav-text">内存的初始化</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#mallocinit"><span class="nav-number">2.1.</span> <span class="nav-text">mallocinit</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#fixalloc"><span class="nav-number">2.2.</span> <span class="nav-text">fixalloc</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#内存分配"><span class="nav-number">3.</span> <span class="nav-text">内存分配</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#mallocgc"><span class="nav-number">3.1.</span> <span class="nav-text">mallocgc</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#refill-cachespan"><span class="nav-number">3.2.</span> <span class="nav-text">refill + cachespan</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#mcentral-grow"><span class="nav-number">3.3.</span> <span class="nav-text">mcentral grow</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#mheap-grow"><span class="nav-number">3.4.</span> <span class="nav-text">mheap grow</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#内存回收与释放"><span class="nav-number">4.</span> <span class="nav-text">内存回收与释放</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.3</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
