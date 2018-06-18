@@ -87,7 +87,7 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="上一篇博客总结了Go调度器的设计以及go调度器解决如何解决了用户态线程典型问题，这一篇就跟踪下Goroutine的源码实现。Go1.5源码剖析 已经写的非常详细了，我只把我觉得重要的地方集中总结一下。这两篇写好挺久了，以后再补充。 Go程序初始化过程C程序的入口地址通常是C运行库的_start函数，它完成了初始化堆栈、命令行参数设置、环境变量初始化、IO初始化、线程相关初始化或者还有全局构造。Go">
 <meta property="og:locale" content="default">
-<meta property="og:updated_time" content="2018-04-27T01:39:54.923Z">
+<meta property="og:updated_time" content="2018-05-22T01:52:04.325Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Goroutine源码记录">
 <meta name="twitter:description" content="上一篇博客总结了Go调度器的设计以及go调度器解决如何解决了用户态线程典型问题，这一篇就跟踪下Goroutine的源码实现。Go1.5源码剖析 已经写的非常详细了，我只把我觉得重要的地方集中总结一下。这两篇写好挺久了，以后再补充。 Go程序初始化过程C程序的入口地址通常是C运行库的_start函数，它完成了初始化堆栈、命令行参数设置、环境变量初始化、IO初始化、线程相关初始化或者还有全局构造。Go">
@@ -530,7 +530,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">25</span>
+                  <span class="site-state-item-count">27</span>
                   <span class="site-state-item-name">posts</span>
                 </a>
               </div>
@@ -541,7 +541,7 @@
               
               <div class="site-state-item site-state-categories">
                 <a href="/categories/index.html">
-                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-count">8</span>
                   <span class="site-state-item-name">categories</span>
                 </a>
               </div>

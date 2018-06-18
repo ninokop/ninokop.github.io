@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.3" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.3">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.3">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.3" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="RPC,micro-service," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="因为最近工作上要做跟gRPC代理相关的东西，在端午假期出门看央美毕业展累得半死之后，还是决定最后一天宅家里看看gRPC的transport的实现，顺便能更了解HTTP2协议。之前写过gRPC负载均衡接口和拦截器相关的笔记，感觉挖的坑越来越多啦。 grpc server之前就大致看过grpc和go-rpc的实现，总结来说go写的服务端都是一个意思，都是accept conn之后开单独的gorouti">
+<meta name="keywords" content="RPC,micro-service">
+<meta property="og:type" content="article">
+<meta property="og:title" content="gRPC的HTTP2实现">
+<meta property="og:url" content="http://yoursite.com/2018/06/18/gRPC的HTTP2实现/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="因为最近工作上要做跟gRPC代理相关的东西，在端午假期出门看央美毕业展累得半死之后，还是决定最后一天宅家里看看gRPC的transport的实现，顺便能更了解HTTP2协议。之前写过gRPC负载均衡接口和拦截器相关的笔记，感觉挖的坑越来越多啦。 grpc server之前就大致看过grpc和go-rpc的实现，总结来说go写的服务端都是一个意思，都是accept conn之后开单独的gorouti">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2018/06/18/gRPC的HTTP2实现/wireshark.png">
+<meta property="og:image" content="http://yoursite.com/2018/06/18/gRPC的HTTP2实现/streamheader.png">
+<meta property="og:updated_time" content="2018-06-18T16:29:57.834Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="gRPC的HTTP2实现">
+<meta name="twitter:description" content="因为最近工作上要做跟gRPC代理相关的东西，在端午假期出门看央美毕业展累得半死之后，还是决定最后一天宅家里看看gRPC的transport的实现，顺便能更了解HTTP2协议。之前写过gRPC负载均衡接口和拦截器相关的笔记，感觉挖的坑越来越多啦。 grpc server之前就大致看过grpc和go-rpc的实现，总结来说go写的服务端都是一个意思，都是accept conn之后开单独的gorouti">
+<meta name="twitter:image" content="http://yoursite.com/2018/06/18/gRPC的HTTP2实现/wireshark.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '5.1.3',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: 'Author'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2018/06/18/gRPC的HTTP2实现/"/>
+
+
+
+
+
+  <title>gRPC的HTTP2实现 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            Home
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            About
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            Tags
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            Categories
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            Archives
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/06/18/gRPC的HTTP2实现/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">gRPC的HTTP2实现</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2018-06-18T15:33:57+08:00">
+                2018-06-18
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/RPC/" itemprop="url" rel="index">
+                    <span itemprop="name">RPC</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>因为最近工作上要做跟gRPC代理相关的东西，在端午假期出门看央美毕业展累得半死之后，还是决定最后一天宅家里看看gRPC的transport的实现，顺便能更了解HTTP2协议。之前写过gRPC负载均衡接口和拦截器相关的笔记，感觉挖的坑越来越多啦。</p>
+<h2 id="grpc-server"><a href="#grpc-server" class="headerlink" title="grpc server"></a>grpc server</h2><p>之前就大致看过grpc和go-rpc的实现，总结来说go写的服务端都是一个意思，都是accept conn之后开单独的goroutine来处理这条连接。处理的过程也大概分成固定的几部分：</p>
+<ol>
+<li><code>transport</code>：按照协议封装Transport层，负责conn上的读写。</li>
+<li><code>codeC</code>：根据协议和注册的schema编解码。</li>
+<li><code>registerService</code>：根据注册的service和method，本地处理请求并返回响应。</li>
+</ol>
+<p>本篇打算从transport开始记录下grpc里HTTP2协议的实现，最主要是想了解steaming形式的流请求是怎么做的，跟long polling、分块传输有什么本质区别。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *Server)</span> <span class="title">handleRawConn</span><span class="params">(rawConn net.Conn)</span></span> &#123;</span><br><span class="line">    rawConn.SetDeadline(time.Now().Add(s.opts.connectionTimeout))</span><br><span class="line">    conn, authInfo, err := s.useTransportAuthenticator(rawConn)</span><br><span class="line">    ...</span><br><span class="line">    <span class="keyword">var</span> serve <span class="function"><span class="keyword">func</span><span class="params">()</span></span></span><br><span class="line"><span class="function">    <span class="title">c</span> := <span class="title">conn</span>.<span class="params">(io.Closer)</span></span></span><br><span class="line"><span class="function">    <span class="title">st</span> := <span class="title">s</span>.<span class="title">newHTTP2Transport</span><span class="params">(conn, authInfo)</span></span></span><br><span class="line"><span class="function">    <span class="title">if</span> <span class="title">st</span> == <span class="title">nil</span></span> &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    c = st</span><br><span class="line">    serve = <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123; s.serveStreams(st) &#125;</span><br><span class="line"></span><br><span class="line">    rawConn.SetDeadline(time.Time&#123;&#125;)</span><br><span class="line">    <span class="keyword">if</span> !s.addConn(c) &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        serve()</span><br><span class="line">        s.removeConn(c)</span><br><span class="line">    &#125;()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>grpc用http2server实现了这个接口，并实现了以下方法。handleStreams提供了处理stream的方法，drain告诉client这个连接上拒绝接收新的RPC请求，write相关的方法允许在这个stream上写东西。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ServerTransport <span class="keyword">interface</span> &#123;</span><br><span class="line">    HandleStreams(<span class="function"><span class="keyword">func</span><span class="params">(*Stream)</span>, <span class="title">func</span><span class="params">(context.Context, <span class="keyword">string</span>)</span> <span class="title">context</span>.<span class="title">Context</span>)</span></span><br><span class="line"><span class="function">    <span class="title">WriteHeader</span><span class="params">(s *Stream, md metadata.MD)</span> <span class="title">error</span></span></span><br><span class="line"><span class="function">    <span class="title">Write</span><span class="params">(s *Stream, hdr []<span class="keyword">byte</span>, data []<span class="keyword">byte</span>, opts *Options)</span> <span class="title">error</span></span></span><br><span class="line"><span class="function">    <span class="title">WriteStatus</span><span class="params">(s *Stream, st *status.Status)</span> <span class="title">error</span></span></span><br><span class="line"><span class="function">    <span class="title">Close</span><span class="params">()</span> <span class="title">error</span></span></span><br><span class="line"><span class="function">    <span class="title">RemoteAddr</span><span class="params">()</span> <span class="title">net</span>.<span class="title">Addr</span></span></span><br><span class="line"><span class="function">    <span class="title">Drain</span><span class="params">()</span></span></span><br><span class="line"><span class="function">    <span class="title">IncrMsgSent</span><span class="params">()</span></span></span><br><span class="line"><span class="function">    <span class="title">IncrMsgRecv</span><span class="params">()</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br></pre></td></tr></table></figure>
+<h2 id="HTTP2-transport"><a href="#HTTP2-transport" class="headerlink" title="HTTP2 transport"></a>HTTP2 transport</h2><p>WireShark默认支持HTTP2，只要在Analysize的decode as里选择这个端口对应的协议为HTTP2就可以了。在TCP三次握手之后server端主动发送了SETTINGS帧，client端也会回Mgic和SETTINGS。之后发送HEADERS和DATA进行通信，过程中可能伴随WINDOW_UPDATE和PING。</p>
+<p><img src="/2018/06/18/gRPC的HTTP2实现/wireshark.png" alt=""></p>
+<h3 id="newHTTP2Server"><a href="#newHTTP2Server" class="headerlink" title="newHTTP2Server"></a>newHTTP2Server</h3><p>这个类似于HTTP2协议的握手，在新建transport时可以看到这个过程。服务端发送的SETTINGS包含一些设置，比如最大并发stream数目。客户端先回应的MAGIC+SETTINGS，其中MAGIC就是PRI表明支持HTTP2.0协议。</p>
+<blockquote>
+<p>The client connection preface starts with a sequence of 24 octets,<br>which in hex notation are:</p>
+<p><code>0x505249202a20485454502f322e300d0a0d0a534d0d0a0d0a</code></p>
+<p>(the string PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n). This sequence is<br>followed by a SETTINGS [SETTINGS] frame (Section 6.5).</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newHTTP2Server</span><span class="params">(conn net.Conn, config *ServerConfig)</span></span></span><br><span class="line"><span class="function">    <span class="params">(_ ServerTransport, err error)</span></span> &#123;</span><br><span class="line">    framer := newFramer(conn, writeBufSize, readBufSize)</span><br><span class="line">    <span class="comment">// Send initial settings as connection preface to client.</span></span><br><span class="line">    <span class="keyword">var</span> isettings []http2.Setting</span><br><span class="line">    isettings = <span class="built_in">append</span>(isettings, http2.Setting&#123;</span><br><span class="line">        ID:  http2.SettingMaxConcurrentStreams,</span><br><span class="line">        Val: maxStreams,</span><br><span class="line">    &#125;)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> err := framer.fr.WriteSettings(isettings...); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, connectionErrorf(<span class="literal">false</span>, err, <span class="string">"transport: %v"</span>, err)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// Adjust the connection flow control window if needed.</span></span><br><span class="line">    <span class="keyword">if</span> delta := <span class="keyword">uint32</span>(icwz - defaultWindowSize); delta &gt; <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> err := framer.fr.WriteWindowUpdate(<span class="number">0</span>, delta); err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span>, connectionErrorf(<span class="literal">false</span>, err, <span class="string">"transport: %v"</span>, err)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    ctx, cancel := context.WithCancel(context.Background())</span><br><span class="line">    t := &amp;http2Server&#123;...&#125;</span><br><span class="line">    t.controlBuf = newControlBuffer(t.ctxDone)</span><br><span class="line">    t.framer.writer.Flush()</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Check the validity of client preface.</span></span><br><span class="line">    preface := <span class="built_in">make</span>([]<span class="keyword">byte</span>, <span class="built_in">len</span>(clientPreface))</span><br><span class="line">    io.ReadFull(t.conn, preface)</span><br><span class="line">    <span class="keyword">if</span> !bytes.Equal(preface, clientPreface) &#123;</span><br><span class="line">        <span class="comment">// transport: http2Server.HandleStreams received bogus greeting</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    frame, err := t.framer.fr.ReadFrame()</span><br><span class="line">    <span class="keyword">if</span> err == io.EOF || err == io.ErrUnexpectedEOF &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    atomic.StoreUint32(&amp;t.activity, <span class="number">1</span>)</span><br><span class="line">    sf, ok := frame.(*http2.SettingsFrame)</span><br><span class="line">    <span class="keyword">if</span> !ok &#123;</span><br><span class="line">        <span class="comment">// transport: http2Server.HandleStreams saw invalid preface type</span></span><br><span class="line">    &#125;</span><br><span class="line">    t.handleSettings(sf)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst)</span><br><span class="line">        t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler</span><br><span class="line">        <span class="keyword">if</span> err := t.loopy.run(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">            errorf(<span class="string">"transport: loopyWriter.run returning. Err: %v"</span>, err)</span><br><span class="line">        &#125;</span><br><span class="line">        t.conn.Close()</span><br><span class="line">        <span class="built_in">close</span>(t.writerDone)</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="keyword">go</span> t.keepalive()</span><br><span class="line">    <span class="keyword">return</span> t, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>这个<code>newLoopyWriter</code>是用来写controlBuf中的控制信息的，在需要发SETTINGS帧或者WindowUpdate帧时通常把信息写入controlBuf.put中。</p>
+<p><code>keepalive</code>用来关闭超过最大空闲连接数或者最大空闲时间的conn。</p>
+</blockquote>
+<h3 id="handleStreams"><a href="#handleStreams" class="headerlink" title="handleStreams"></a>handleStreams</h3><p>对conn的处理都封装在了transport的HandleStreams方法中。从frame中读取帧并按照帧类型处理。一次通信过程通常以SETINGS+HEADERS+DATA开始。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *http2Server)</span> <span class="title">HandleStreams</span><span class="params">(handle <span class="keyword">func</span>(*Stream)</span>,</span></span><br><span class="line"><span class="function">    <span class="title">traceCtx</span> <span class="title">func</span><span class="params">(context.Context, <span class="keyword">string</span>)</span> <span class="title">context</span>.<span class="title">Context</span>)</span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> <span class="built_in">close</span>(t.readerDone)</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        frame, err := t.framer.fr.ReadFrame()</span><br><span class="line">        atomic.StoreUint32(&amp;t.activity, <span class="number">1</span>)</span><br><span class="line">        ....</span><br><span class="line">        <span class="keyword">switch</span> frame := frame.(<span class="keyword">type</span>) &#123;</span><br><span class="line">        <span class="keyword">case</span> *http2.MetaHeadersFrame:</span><br><span class="line">            <span class="keyword">if</span> t.operateHeaders(frame, handle, traceCtx) &#123;</span><br><span class="line">                t.Close()</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">        <span class="keyword">case</span> *http2.DataFrame:</span><br><span class="line">            t.handleData(frame)</span><br><span class="line">        <span class="keyword">case</span> *http2.RSTStreamFrame:</span><br><span class="line">            t.handleRSTStream(frame)</span><br><span class="line">        <span class="keyword">case</span> *http2.SettingsFrame:</span><br><span class="line">            t.handleSettings(frame)</span><br><span class="line">        <span class="keyword">case</span> *http2.PingFrame:</span><br><span class="line">            t.handlePing(frame)</span><br><span class="line">        <span class="keyword">case</span> *http2.WindowUpdateFrame:</span><br><span class="line">            t.handleWindowUpdate(frame)</span><br><span class="line">        <span class="keyword">case</span> *http2.GoAwayFrame:</span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>每个stream都是从收到HEADER帧开始创建和处理的，根据header里带的fields去处理decodeState，新建Stream，下面就是这个header可能带上的fields。</p>
+<p><img src="/2018/06/18/gRPC的HTTP2实现/streamheader.png" alt=""></p>
+<p>stream以streamID为区分，包含recvBuffer以及涉及编解码，方法和序列化方式，流控参数等一系列配置。最后交给handle这个回调方法去处理，在这里面真正开始读请求，进行本地调用和回写响应。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *http2Server)</span> <span class="title">operateHeaders</span><span class="params">(frame *http2.MetaHeadersFrame, </span></span></span><br><span class="line"><span class="function"><span class="params">    handle <span class="keyword">func</span>(*Stream)</span>, <span class="title">traceCtx</span> <span class="title">func</span><span class="params">(context.Context, <span class="keyword">string</span>)</span> <span class="title">context</span>.<span class="title">Context</span>) </span></span><br><span class="line"><span class="function">    <span class="params">(<span class="built_in">close</span> <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">    streamID := frame.Header().StreamID</span><br><span class="line">    <span class="keyword">var</span> state decodeState</span><br><span class="line">    <span class="keyword">for</span> _, hf := <span class="keyword">range</span> frame.Fields &#123;</span><br><span class="line">        <span class="keyword">if</span> err := state.processHeaderField(hf); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    buf := newRecvBuffer()</span><br><span class="line">    s := &amp;Stream&#123;</span><br><span class="line">        id:             streamID,</span><br><span class="line">        st:             t,</span><br><span class="line">        buf:            buf,</span><br><span class="line">        fc:             &amp;inFlow&#123;limit: <span class="keyword">uint32</span>(t.initialWindowSize)&#125;,</span><br><span class="line">        recvCompress:   state.encoding,</span><br><span class="line">        method:         state.method,</span><br><span class="line">        contentSubtype: state.contentSubtype,</span><br><span class="line">    &#125;</span><br><span class="line">    t.maxStreamID = streamID</span><br><span class="line">    t.activeStreams[streamID] = s</span><br><span class="line">    ...</span><br><span class="line">    handle(s)</span><br><span class="line">    <span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>从stream里读出的method就是<code>helloworld.Greeter/SayHello</code>，前者是服务名，后者是方法名。根据在Server上通过RegisterService注册的服务可以获得对应的method，再根据是Unary还是Stream类型分别处理。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *Server)</span> <span class="title">handleStream</span><span class="params">(t transport.ServerTransport, </span></span></span><br><span class="line"><span class="function"><span class="params">    stream *transport.Stream, trInfo *traceInfo)</span></span> &#123;</span><br><span class="line">    sm := stream.Method()</span><br><span class="line">    pos := strings.LastIndex(sm, <span class="string">"/"</span>)</span><br><span class="line">    service := sm[:pos]</span><br><span class="line">    method := sm[pos+<span class="number">1</span>:]</span><br><span class="line">    srv, ok := s.m[service]</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Unary RPC or Streaming RPC?</span></span><br><span class="line">    <span class="keyword">if</span> md, ok := srv.md[method]; ok &#123;</span><br><span class="line">        s.processUnaryRPC(t, stream, srv, md, trInfo)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> sd, ok := srv.sd[method]; ok &#123;</span><br><span class="line">        s.processStreamingRPC(t, stream, srv, sd, trInfo)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="processUnaryRPC"><a href="#processUnaryRPC" class="headerlink" title="processUnaryRPC"></a>processUnaryRPC</h3><p><a href="https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md" target="_blank" rel="noopener">grpc的协议文档</a>里解释了request和response格式。总结来说就是一个请求分为HEADER帧，可以从帧里读出HTTP头域的信息，其次是连续的DATA帧，用来发请求message，最后有个DATA帧代表end of stream。其中中间用来发message的连续帧的格式是：</p>
+<blockquote>
+<p>Request → Request-Headers *Length-Prefixed-Message EOS</p>
+<ul>
+<li><strong>Length-Prefixed-Message</strong> → Compressed-Flag Message-Length Message</li>
+<li><strong>Compressed-Flag</strong> → 0 / 1 # encoded as 1 byte unsigned integer</li>
+<li><strong>Message-Length</strong> → {<em>length of Message</em>} # encoded as 4 byte unsigned integer</li>
+<li><strong>Message</strong> → *{binary octet}</li>
+</ul>
+</blockquote>
+<p>对应代码来看grpc在处理上直接把这个Length-prefixed-message作为Header帧的后续进行处理，并没有放在单独的dataframe的处理函数中。所以在下面processUnaryRPC的处理过程中recvMsg</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *Server)</span> <span class="title">processUnaryRPC</span><span class="params">(t transport.ServerTransport, </span></span></span><br><span class="line"><span class="function"><span class="params">    stream *transport.Stream, srv *service, md *MethodDesc, </span></span></span><br><span class="line"><span class="function"><span class="params">    trInfo *traceInfo)</span> <span class="params">(err error)</span></span> &#123;</span><br><span class="line"></span><br><span class="line">    p := &amp;parser&#123;r: stream&#125;</span><br><span class="line">    pf, req, err := p.recvMsg(s.opts.maxReceiveMessageSize)</span><br><span class="line"></span><br><span class="line">    df := <span class="function"><span class="keyword">func</span><span class="params">(v <span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        s.getCodec(stream.ContentSubtype()).Unmarshal(req, v)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    ctx := NewContextWithServerTransportStream(stream.Context(), stream)</span><br><span class="line">    reply, appErr := md.Handler(srv.server, ctx, df, s.opts.unaryInt)</span><br><span class="line">    ....</span><br><span class="line">    opts := &amp;transport.Options&#123;</span><br><span class="line">        Last:  <span class="literal">true</span>,</span><br><span class="line">        Delay: <span class="literal">false</span>,</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> err := s.sendResponse(t, stream, reply, cp, opts, comp); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> t.WriteStatus(stream, status.New(codes.OK, <span class="string">""</span>))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>对应协议，每个parser的头对应Compressed-Flag和Message-Length，在UnaryRPC模式下请求Message只有一个。读出后根据不同的codec和注册的方法入参进行反序列化，调用本地方法获得响应。最后通过sendresponse发送响应。收到EOS的data帧之后给stream写入EOF，并处理server端activeStream相关记录表。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> parser <span class="keyword">struct</span> &#123;</span><br><span class="line">    r io.Reader</span><br><span class="line">    header [<span class="number">5</span>]<span class="keyword">byte</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *parser)</span> <span class="title">recvMsg</span><span class="params">(maxReceiveMessageSize <span class="keyword">int</span>)</span> </span></span><br><span class="line"><span class="function">    <span class="params">(pf payloadFormat, msg []<span class="keyword">byte</span>, err error)</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> _, err := p.r.Read(p.header[:]); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>, <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pf = payloadFormat(p.header[<span class="number">0</span>])</span><br><span class="line">    length := binary.BigEndian.Uint32(p.header[<span class="number">1</span>:])</span><br><span class="line">    <span class="keyword">if</span> length == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> pf, <span class="literal">nil</span>, <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    msg = <span class="built_in">make</span>([]<span class="keyword">byte</span>, <span class="keyword">int</span>(length))</span><br><span class="line">    <span class="keyword">if</span> _, err := p.r.Read(msg); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>, <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> pf, msg, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="processStreamingRPC"><a href="#processStreamingRPC" class="headerlink" title="processStreamingRPC"></a>processStreamingRPC</h3><p>grpc支持stream流式的请求和响应，sd是从注册的服务中读取的StreamDesc。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *Server)</span> <span class="title">processStreamingRPC</span><span class="params">(t transport.ServerTransport,</span></span></span><br><span class="line"><span class="function"><span class="params">    stream *transport.Stream, srv *service, sd *StreamDesc, </span></span></span><br><span class="line"><span class="function"><span class="params">    trInfo *traceInfo)</span> <span class="params">(err error)</span></span> &#123;</span><br><span class="line">    ...</span><br><span class="line">    ctx := NewContextWithServerTransportStream(stream.Context(), stream)</span><br><span class="line">    ss := &amp;serverStream&#123;</span><br><span class="line">        ctx:   ctx,</span><br><span class="line">        t:     t,</span><br><span class="line">        s:     stream,</span><br><span class="line">        p:     &amp;parser&#123;r: stream&#125;,</span><br><span class="line">        codec: s.getCodec(stream.ContentSubtype()),</span><br><span class="line">        maxReceiveMessageSize: s.opts.maxReceiveMessageSize,</span><br><span class="line">        maxSendMessageSize:    s.opts.maxSendMessageSize,</span><br><span class="line">        trInfo:                trInfo,</span><br><span class="line">        statsHandler:          sh,</span><br><span class="line">    &#125;</span><br><span class="line">    appErr = sd.Handler(server, ss)</span><br><span class="line">    ...</span><br><span class="line">    <span class="keyword">return</span> t.WriteStatus(ss.s, status.New(codes.OK, <span class="string">""</span>))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个StreamDesc注册的函数格式是StreamHandler，每个<code>sd.Handler</code>执行之前由processStreamingRPC生成新的<code>serverStream</code>来实现协议基本的SendMsg和RecvMsg方法。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> StreamHandler <span class="function"><span class="keyword">func</span><span class="params">(srv <span class="keyword">interface</span>&#123;&#125;, stream ServerStream)</span> <span class="title">error</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// <span class="title">StreamDesc</span> <span class="title">represents</span> <span class="title">a</span> <span class="title">streaming</span> <span class="title">RPC</span> <span class="title">service</span>'<span class="title">s</span> <span class="title">method</span> <span class="title">specification</span>.</span></span><br><span class="line"><span class="function"><span class="title">type</span> <span class="title">StreamDesc</span> <span class="title">struct</span></span> &#123;</span><br><span class="line">    StreamName <span class="keyword">string</span></span><br><span class="line">    Handler    StreamHandler</span><br><span class="line"></span><br><span class="line">    <span class="comment">// At least one of these is true.</span></span><br><span class="line">    ServerStreams <span class="keyword">bool</span></span><br><span class="line">    ClientStreams <span class="keyword">bool</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>SendMsg和RecvMsg的实现跟processUnaryRPC里的一致。之所以是称为stream是指在server端的实现上通常是下面这种循环模式。最终以_User_Chat_Handler注册到StreamDesc里。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(svr *UserService)</span> <span class="title">Chat</span><span class="params">(stream pb.User_ChatServer)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    log.Printf(<span class="string">"Begin Chat"</span>)</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        in, err := stream.Recv()</span><br><span class="line">        <span class="keyword">if</span> err == io.EOF &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> err</span><br><span class="line">        &#125;</span><br><span class="line">        msg := in.GetTalk()</span><br><span class="line">        stream.Send(&amp;pb.UserMessage&#123;</span><br><span class="line">            Talk: <span class="string">"You Talk: "</span> + msg,</span><br><span class="line">        &#125;)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个示例转自某个博客，暂时没找到原始出处，之后补上。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> _<span class="title">User_Chat_Handler</span><span class="params">(srv <span class="keyword">interface</span>&#123;&#125;, stream grpc.ServerStream)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> srv.(UserServer).Chat(&amp;userChatServer&#123;stream&#125;)</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> User_ChatServer <span class="keyword">interface</span> &#123;</span><br><span class="line">    Send(*UserMessage) error</span><br><span class="line">    Recv() (*UserMessage, error)</span><br><span class="line">    grpc.ServerStream</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> userChatServer <span class="keyword">struct</span> &#123;</span><br><span class="line">    grpc.ServerStream</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(x *userChatServer)</span> <span class="title">Send</span><span class="params">(m *UserMessage)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> x.ServerStream.SendMsg(m)</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(x *userChatServer)</span> <span class="title">Recv</span><span class="params">()</span> <span class="params">(*UserMessage, error)</span></span> &#123;</span><br><span class="line">    m := <span class="built_in">new</span>(UserMessage)</span><br><span class="line">    <span class="keyword">if</span> err := x.ServerStream.RecvMsg(m); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> m, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="register-service"><a href="#register-service" class="headerlink" title="register service"></a>register service</h2><p>在server端的实现里通常pb会定义这个ServiceDesc以及包含的MethodDesc。外部可以自定义满足GreeterServer接口的具体实例通过RegisterGreeterServer注册到grpcServer里。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> GreeterServer <span class="keyword">interface</span> &#123;</span><br><span class="line">    SayHello(context.Context, *HelloRequest) (*HelloReply, error)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">RegisterGreeterServer</span><span class="params">(s *grpc.Server, srv GreeterServer)</span></span> &#123;</span><br><span class="line">    s.RegisterService(&amp;_Greeter_serviceDesc, srv)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注册的这个MethodDesc的Handler是满足特定func入参格式的handler。在processUnaryRPC处理函数中会根据服务名和方法名找到Handler，并调用<code>_Greeter_SayHello_Handler</code>。其中srv就是register的那个实例，dec是加入在这里做compress和反序列化的函数，interceptor是拦截器可参考我之前博客<a href="">gRPC拦截器interceptor与chain</a>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> _Greeter_serviceDesc = grpc.ServiceDesc&#123;</span><br><span class="line">    ServiceName: <span class="string">"helloworld.Greeter"</span>,</span><br><span class="line">    HandlerType: (*GreeterServer)(<span class="literal">nil</span>),</span><br><span class="line">    Methods: []grpc.MethodDesc&#123;</span><br><span class="line">        &#123;</span><br><span class="line">            MethodName: <span class="string">"SayHello"</span>,</span><br><span class="line">            Handler:    _Greeter_SayHello_Handler,</span><br><span class="line">        &#125;,</span><br><span class="line">    &#125;,</span><br><span class="line">    Streams:  []grpc.StreamDesc&#123;&#125;,</span><br><span class="line">    Metadata: <span class="string">"helloworld.proto"</span>,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> _<span class="title">Greeter_SayHello_Handler</span><span class="params">(srv <span class="keyword">interface</span>&#123;&#125;, ctx context.Context, </span></span></span><br><span class="line"><span class="function"><span class="params">    dec <span class="keyword">func</span>(<span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">error</span>, <span class="title">interceptor</span> <span class="title">grpc</span>.<span class="title">UnaryServerInterceptor</span>)</span></span><br><span class="line"><span class="function">    <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">    in := <span class="built_in">new</span>(HelloRequest)</span><br><span class="line">    <span class="keyword">if</span> err := dec(in); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> interceptor == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> srv.(GreeterServer).SayHello(ctx, in)</span><br><span class="line">    &#125;</span><br><span class="line">    info := &amp;grpc.UnaryServerInfo&#123;</span><br><span class="line">        Server:     srv,</span><br><span class="line">        FullMethod: <span class="string">"/helloworld.Greeter/SayHello"</span>,</span><br><span class="line">    &#125;</span><br><span class="line">    handler := <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">        <span class="keyword">return</span> srv.(GreeterServer).SayHello(ctx, req.(*HelloRequest))</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> interceptor(ctx, in, info, handler)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>grpc注册和读取的方式都很直接，pb的相关东西也是自动生成的。并不需要像go-rpc那样通过反射来存取相关函数的入参等信息。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *Server)</span> <span class="title">register</span><span class="params">(sd *ServiceDesc, ss <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    ....</span><br><span class="line">    srv := &amp;service&#123;</span><br><span class="line">        server: ss,</span><br><span class="line">        md:     <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">string</span>]*MethodDesc),</span><br><span class="line">        sd:     <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">string</span>]*StreamDesc),</span><br><span class="line">        mdata:  sd.Metadata,</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">range</span> sd.Methods &#123;</span><br><span class="line">        d := &amp;sd.Methods[i]</span><br><span class="line">        srv.md[d.MethodName] = d</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">range</span> sd.Streams &#123;</span><br><span class="line">        d := &amp;sd.Streams[i]</span><br><span class="line">        srv.sd[d.StreamName] = d</span><br><span class="line">    &#125;</span><br><span class="line">    s.m[sd.ServiceName] = srv</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="codec"><a href="#codec" class="headerlink" title="codec"></a>codec</h2><p>grpc的encoding包提供了proto和gzip两种方式，以插件的形式存在。一般都可以直接proto.Unmarshal。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(codec)</span> <span class="title">Unmarshal</span><span class="params">(data []<span class="keyword">byte</span>, v <span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    protoMsg := v.(proto.Message)</span><br><span class="line">    protoMsg.Reset()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> pu, ok := protoMsg.(proto.Unmarshaler); ok &#123;</span><br><span class="line">        <span class="comment">// object can unmarshal itself, no need for buffer</span></span><br><span class="line">        <span class="keyword">return</span> pu.Unmarshal(data)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    cb := protoBufferPool.Get().(*cachedProtoBuffer)</span><br><span class="line">    cb.SetBuf(data)</span><br><span class="line">    err := cb.Unmarshal(protoMsg)</span><br><span class="line">    cb.SetBuf(<span class="literal">nil</span>)</span><br><span class="line">    protoBufferPool.Put(cb)</span><br><span class="line">    <span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="summary"><a href="#summary" class="headerlink" title="summary"></a>summary</h2><p>主要写了HTTP2协议结合transport的实现，理解stream和grpc server端服务注册相关的内容。下一节写grpc client端和proto相关的内容吧。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/RPC/" rel="tag"># RPC</a>
+          
+            <a href="/tags/micro-service/" rel="tag"># micro-service</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/06/15/服务网格istio的安装和基本概念/" rel="next" title="服务网格istio的安装和基本概念">
+                <i class="fa fa-chevron-left"></i> 服务网格istio的安装和基本概念
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/nino.jpg"
+                alt="nino" />
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">27</span>
+                  <span class="site-state-item-name">posts</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-name">categories</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">tags</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          <div class="links-of-author motion-element">
+            
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/ninokop" target="_blank" title="GitHub">
+                    
+                      <i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="http://weibo.com/u/1732126300" target="_blank" title="WeiBo">
+                    
+                      <i class="fa fa-fw fa-globe"></i>WeiBo</a>
+                </span>
+              
+            
+          </div>
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#grpc-server"><span class="nav-number">1.</span> <span class="nav-text">grpc server</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#HTTP2-transport"><span class="nav-number">2.</span> <span class="nav-text">HTTP2 transport</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#newHTTP2Server"><span class="nav-number">2.1.</span> <span class="nav-text">newHTTP2Server</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#handleStreams"><span class="nav-number">2.2.</span> <span class="nav-text">handleStreams</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#processUnaryRPC"><span class="nav-number">2.3.</span> <span class="nav-text">processUnaryRPC</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#processStreamingRPC"><span class="nav-number">2.4.</span> <span class="nav-text">processStreamingRPC</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#register-service"><span class="nav-number">3.</span> <span class="nav-text">register service</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#codec"><span class="nav-number">4.</span> <span class="nav-text">codec</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#summary"><span class="nav-number">5.</span> <span class="nav-text">summary</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a></div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.3</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.3"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.3"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.3"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.3"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.3"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
