@@ -83,26 +83,26 @@
 <meta name="keywords" content="network,Kubernetes">
 <meta property="og:type" content="article">
 <meta property="og:title" content="容器网络和Kube-Proxy笔记整理">
-<meta property="og:url" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/index.html">
+<meta property="og:url" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/index.html">
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="前段时间作死把hexo的图片显示搞崩了，长时间不想写东西，也不知道自己在瞎忙什么。为了重新进入学习状态，还是老老实实把以前写过的东西汇总一下吧。  写了一半发现容器网络的内容太多太杂 挖个坑 以后填  Linux Bridge第一次对Linux Namespace有了解是看了这篇博客，按照博客介绍的方法模拟了docker0网桥来隔离两个网络命名空间。docker run一个容器之后，docker会">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/docker-net.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/ns-route.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/proc-ns.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/netfilter.svg">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/docker-iptables.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/ns-route.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/host-route.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/iptables-save.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/kube-service.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/flannel.png">
-<meta property="og:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/vxlan.png">
-<meta property="og:updated_time" content="2018-06-15T10:09:22.988Z">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/docker-net.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/ns-route.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/proc-ns.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/netfilter.svg">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/docker-iptables.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/ns-route.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/host-route.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/iptables-save.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/kube-service.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/flannel.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/vxlan.png">
+<meta property="og:updated_time" content="2018-06-22T01:20:12.225Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="容器网络和Kube-Proxy笔记整理">
 <meta name="twitter:description" content="前段时间作死把hexo的图片显示搞崩了，长时间不想写东西，也不知道自己在瞎忙什么。为了重新进入学习状态，还是老老实实把以前写过的东西汇总一下吧。  写了一半发现容器网络的内容太多太杂 挖个坑 以后填  Linux Bridge第一次对Linux Namespace有了解是看了这篇博客，按照博客介绍的方法模拟了docker0网桥来隔离两个网络命名空间。docker run一个容器之后，docker会">
-<meta name="twitter:image" content="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/docker-net.png">
+<meta name="twitter:image" content="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/docker-net.png">
 
 
 
@@ -132,7 +132,7 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/"/>
+  <link rel="canonical" href="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/"/>
 
 
 
@@ -275,7 +275,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/05/21/容器网络和Kube-Proxy笔记整理/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/01/21/容器网络和Kube-Proxy笔记整理/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="nino">
@@ -304,8 +304,8 @@
               
                 <span class="post-meta-item-text">Posted on</span>
               
-              <time title="Post created" itemprop="dateCreated datePublished" datetime="2018-05-21T20:42:23+08:00">
-                2018-05-21
+              <time title="Post created" itemprop="dateCreated datePublished" datetime="2018-01-21T20:42:23+08:00">
+                2018-01-21
               </time>
             
 
@@ -372,7 +372,7 @@
 <blockquote>
 <p>物理的网桥是一个标准的二层网络设备，一般它只有两个网口，连接两个物理网络，起到基本的隔离冲突域的作用。网桥通过MAC地址学习的方式实现二层上相对高效的通信。目前标准网桥设备大概已经被淘汰了，替代者是二层交换机，可以算是多口网桥。</p>
 </blockquote>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/docker-net.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/docker-net.png" alt=""></p>
 <p>之前一直有个疑问，<strong>为什么docker0转发的时候会经过iptables，为什么不在二层通过MAC学习直接转发了</strong>。后来找到一种比较能理解的说法是：linux bridge可以在二层转发，docker run之后docker daemon打开了以下参数，使bridge的Netfilter可以复用IP层的Netfilter代码，如果关掉这个参数，其实可以通过二层直达的包就不会在iptables日志里看到了。</p>
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/proc/sys/net/bridge/bridge-nf-call-iptables</span><br></pre></td></tr></table></figure>
 <p>还有一个问题是，bridge本身是个带IP的有三层属性的设备，它本身是有ip包forward能力的，前提是打开了ip_forward参数。不然可能出现docker0拒绝掉发往容器的ip包。</p>
@@ -383,15 +383,15 @@
 <p>把这一对虚拟网卡的另一个veth-ns1添加到lxcbr0这个网桥当中，并为ns2添加一个路由规则，让ns2可以通过默认路由访问到lxcbr0。</p>
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">brctl addif lxcbr0 veth-ns1</span><br><span class="line">ip netns exec ns2 ip route add default via <span class="number">172.17</span>.<span class="number">20.1</span></span><br><span class="line">ip link set veth-ns1 up</span><br></pre></td></tr></table></figure>
 <p>添加路由后可以从ns2 ping 主机IP，最终会会通过默认路由发到lxcbr0，即主机上。</p>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/ns-route.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/ns-route.png" alt=""></p>
 <h4 id="在docker0添加网卡"><a href="#在docker0添加网卡" class="headerlink" title="在docker0添加网卡"></a>在docker0添加网卡</h4><p>当主机上跑了多个容器时，会发现vethxxxx这种虚拟网卡对变多，这意味着每docker run一个容器都会创建一个虚拟网卡，其中peerA连接到docker0网卡并启动，peerB则放入另一个隔离的netns，设置它的名字为eth0，配置ip地址并启动。最后在内外添加路由就可以互相通信了。那对以有的容器，如何在容器里动态添加另一块网卡eth1，操作很类似，只是首先要找到这个容器对应的ns是什么。</p>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/proc-ns.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/proc-ns.png" alt=""></p>
 <p>正常情况下我们创建一个ns空间会在<code>/var/run/netns</code>下看到对应的描述符，然后通过<code>ip netns exec nsx</code>这种命令去另一个net命名空间执行命令。但docker可能为了不让用户误操作吧，把这个netns隐藏了。可以通过以下方式去找到这个空间并挂到/var/run/netns目录下。</p>
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pid=`docker inspect -f <span class="string">'&#123;&#123;.State.Pid&#125;&#125;'</span> <span class="variable">$container_id</span>`</span><br><span class="line">ln -s /proc/<span class="variable">$pid</span>/ns/net /var/run/netns/<span class="variable">$container_id</span></span><br></pre></td></tr></table></figure>
 <p>在这个docker0添加一对网卡的方式也跟上面差不多。</p>
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">ip link add peerA type veth peer name peerB</span><br><span class="line">brctl addif docker0 peerA</span><br><span class="line">ip link set peerA up</span><br><span class="line">ip link set peerB netns $&#123;container_ip&#125;</span><br><span class="line">ip netns exec $&#123;container_ip&#125; ip link set dev peerB name eth1</span><br><span class="line">ip netns exec $&#123;container_ip&#125; ip link set eth1 up </span><br><span class="line">ip netns exec $&#123;container_ip&#125; ip addr add $&#123;br_ip&#125; dev eth1</span><br></pre></td></tr></table></figure>
 <h3 id="iptables"><a href="#iptables" class="headerlink" title="iptables"></a>iptables</h3><p>通常所说iptables是Linux内置的防火墙，由netfilter和iptables两部分组成。netfilter在内核空间，是内核的一部分，它包含N张数据的过滤表，这些数据表描述了内核控制数据过滤的规则。iptables是个用户空间的工具来修改这些过滤表的规则。</p>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/netfilter.svg" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/netfilter.svg" alt=""></p>
 <p>netfilter主要涉及4个表和5个链，四个表的优先级为raw-&gt;manage-&gt;nat-&gt;filter。</p>
 <ul>
 <li>filter表专门用来过滤表，它内建了三个链。如上图所示INPUT链是在路由后针对那些目的地是本地的包的过滤，FORWARD链过滤所有源和目的都不是本地的包，OUTPUT链过滤所有本地产生的包。</li>
@@ -402,7 +402,7 @@
 <h4 id="iptables-log"><a href="#iptables-log" class="headerlink" title="iptables log"></a>iptables log</h4><p>ubuntu14.04的iptables日志可以在/var/log/syslog里查看，前提是在iptables规则里设置了日志等级。比如说通过以下命令可以给nat表的prerouting链添加日志级别为4，且带有相关prefix标记的日志。这个日志也可以通过-D命令删除或者换位。</p>
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">iptables -t nat -I PREROUTING -j LOG --log-level <span class="number">4</span> --log-prefix <span class="string">"[Prerouting-nat-nino]"</span></span><br><span class="line">iptables -t nat -D PREROUTING <span class="number">2</span></span><br></pre></td></tr></table></figure>
 <p>可以通过-t指定表来查看对应规则。</p>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/docker-iptables.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/docker-iptables.png" alt=""></p>
 <h3 id="docker网络"><a href="#docker网络" class="headerlink" title="docker网络"></a>docker网络</h3><h4 id="四种原生网络模式"><a href="#四种原生网络模式" class="headerlink" title="四种原生网络模式"></a>四种原生网络模式</h4><p>bridge模式表示将一个主机上的docker容器连接到一个虚拟网桥上。none模式表示docker容器拥有自己的netns，但并不为docker容器配置任何网络，也就是它没有网卡、ip和路由信息，需要自己去配置好。host模式是容器不会获得独立的netns，而是和宿主机公用一个netns，容器继续使用宿主机的IP和端口。container模式指新创建的容器和已经存在的一个容器共享一个netns。</p>
 <blockquote>
 <p>这里公用netns的意思是，其他linux 命名空间是隔离的。</p>
@@ -411,9 +411,9 @@
 <blockquote>
 <p>容器中查了下arp缓存，发现有172.17.20.13的mac地址，所以试了下去掉主机route发现仍然是可以通的。</p>
 </blockquote>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/ns-route.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/ns-route.png" alt=""></p>
 <h4 id="容器到主机"><a href="#容器到主机" class="headerlink" title="容器到主机"></a>容器到主机</h4><p>在容器中curl host肯定是走默认路由的，包会带上Gateway的mac地址，即包通过eth0发到docker0。docker0收到包后发现mac地址就是自己，于是包开始往上层协议栈走。这时可以分别在NAT的PREROUTING链、FILTER的INPUT链上看到数据包。</p>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/host-route.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/host-route.png" alt=""></p>
 <p>当主机上层处理完数据发给容器时会走docker0这个直连网络，通过二层的arp缓存找到容器对应的mac地址，通过linux bridge上与之对应的veth设备发出。</p>
 <p>如果是从容器发往同一个网络中别的主机，在发出之前会做SNAT（MASQUERADE），将源地址换为主机IP发送。看到NAT表的POSTROUTING链刚好有这个SNAT的规则，即把所有源地址是容器的数据全都改成网卡地址。</p>
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Chain POSTROUTING (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination         </span><br><span class="line">MASQUERADE  all  --  <span class="number">172.17</span>.<span class="number">0.0</span>/<span class="number">16</span>        anywhere            </span><br><span class="line">MASQUERADE  tcp  --  <span class="number">172.17</span>.<span class="number">0.2</span>           <span class="number">172.17</span>.<span class="number">0.2</span>           tcp dpt:http-alt</span><br></pre></td></tr></table></figure>
@@ -423,14 +423,14 @@
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">docker-proxy -proto tcp -host-ip <span class="number">0.0</span>.<span class="number">0.0</span> -host-port <span class="number">8080</span> </span><br><span class="line">-container-ip <span class="number">172.17</span>.<span class="number">0.2</span> -container-port <span class="number">8080</span></span><br></pre></td></tr></table></figure>
 <p>不论哪种方式，最终NAT的PREROUTING链会处理dst-type为local的请求。把所有目的端口为9090的请求转给容器对应端口，完成端口映射。</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Chain PREROUTING (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination         </span><br><span class="line">DOCKER     all  --  anywhere             anywhere             ADDRTYPE match dst-type LOCAL</span><br><span class="line">Chain DOCKER (2 references)</span><br><span class="line">target     prot opt source               destination         </span><br><span class="line">DNAT       tcp  --  anywhere             anywhere             tcp dpt:9090 to:172.17.0.2:8080</span><br></pre></td></tr></table></figure>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/iptables-save.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/iptables-save.png" alt=""></p>
 <h3 id="kube-service"><a href="#kube-service" class="headerlink" title="kube-service"></a>kube-service</h3><p>就不写概念了，总结来说service解耦了后端提供服务的pod和用户的访问，它本身是个逻辑概念，用户只要访问service的clusterIP和clusterPort就可以轮询的访问到后端关联到这个service的pod。具体完成这个负载均衡的就是kube-proxy，它是运行在每个node节点上的简单的网络代理和负载均衡器。</p>
 <blockquote>
 <p>service的三种方式：clusterIP nodePort和Loadbalancer</p>
 </blockquote>
 <p>kube-proxy有三种转发流量的方式，包括userspace、iptables、ipvs。userspace这种模式涉及到数据包从内核态到用户态的拷贝，然后做代理和转发。iptables模式下kube-proxy直接修改iptables规则来转发包。ipvs模式是内核基于netfilter实现的L4负载均衡，还没用过，以后再说。</p>
 <h4 id="iptables-1"><a href="#iptables-1" class="headerlink" title="iptables"></a>iptables</h4><p>环境上部署了hello-node这个应用对应后端两个pod，分别对应172.31.0.3:80和172.31.0.18:80。这个Service以NodePort的形式发布，对应的nodePort为30012。</p>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/kube-service.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/kube-service.png" alt=""></p>
 <p>如下所示的两条iptables规则将访问本机nodePort的请求转发给KUBE-SVC-D4CJ3Y6U24W4OUPV链。除了nodePort这种方式外，在集群内部访问时通过ClusterIP访问最后发现也定向到这个D4CJ3Y6U24W4OUPV链。</p>
 <figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-NODEPORTS -p tcp -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m tcp --dport <span class="number">30012</span> -j KUBE-SVC-D4CJ3Y6U24W4OUPV</span><br><span class="line">-A KUBE-SERVICES -d <span class="number">10.247</span>.<span class="number">97.67</span>/<span class="number">32</span> -p tcp -m comment --comment <span class="string">"default/hello-node:service0 cluster IP"</span> </span><br><span class="line">  -m tcp --dport <span class="number">80</span> -j KUBE-SVC-D4CJ3Y6U24W4OUPV</span><br></pre></td></tr></table></figure>
 <p>这个D4CJ3Y6U24W4OUPV链对应的规则为50%的流量进入B6YQYXVNZHOCD2LT链，另外50%进入进入另一链。这两个链分别指向两个后端pod。</p>
@@ -463,7 +463,7 @@
 <li>为集群内每个节点分配子网，容器将自动从该子网中获取ip地址</li>
 <li>当有新的节点加入到网络时，为每个node增加路由配置</li>
 </ol>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/flannel.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/flannel.png" alt=""></p>
 <blockquote>
 <p>不同节点docker怎么使用不同ip地址</p>
 </blockquote>
@@ -477,7 +477,7 @@
 </blockquote>
 <p>如果是VxLAN的方式，则flannel0收到后不会转发给eth0，因为它是个vxlan设备，即virtual tunnel end point。flannel0发现目的地址不是自己，但在直连网络中。这时并不会arp直接问mac地址，内核会为vxlan设备引发一个L3 miss事件，并把arp请求发到用户空间的flanned进程。</p>
 <p>flanneld会从etcd当中找子网对应的vxlan对端vtep设备的mac地址，并写入节点的arp缓存，然后内核就用这个mac地址封装以太帧。这个帧实际是vxlan隧道上的包，不能在物理网络传输。内核会再次封包，向flanneld发起L2 miss事件，通过etcd获取vtep设备对应的node的IP，并注册到fdb。</p>
-<p><img src="/2018/05/21/容器网络和Kube-Proxy笔记整理/vxlan.png" alt=""></p>
+<p><img src="/2018/01/21/容器网络和Kube-Proxy笔记整理/vxlan.png" alt=""></p>
 <p>最后这个包把整个上面的以太包封城了udp包，然后再IP+mac封好，发到对端节点上。对端节点揭开udp包发现时vxlan包，于是拆包后将这个包发给本机的flannel0设备。</p>
 <h4 id="calico-amp-weave-amp-canal"><a href="#calico-amp-weave-amp-canal" class="headerlink" title="calico &amp; weave &amp; canal"></a>calico &amp; weave &amp; canal</h4><p>calico是个纯三层的数据中心网络方案，不需要overlay。每个容器都分配了一个可路由的ip，通信时不需要解包和封包网络性能损耗小。weave是去中心化的方案，通过每个host运行wRouter，并保持TCP连接。我们貌似用的是cannel，结合了flannel和calico。采用flnnael的vxlan实现host2host的通信，同时基于calico的网络策略能力实现了pod之间的网络隔离。</p>
 <h3 id="问题分析和解决"><a href="#问题分析和解决" class="headerlink" title="问题分析和解决"></a>问题分析和解决</h3><p>这个是同事前两年写的，<a href="https://bbs.huaweicloud.com/blogs/c2c312ebac9411e69023286ed488c65c" target="_blank" rel="noopener">几个容器网络相关问题的分析和解决总结</a>。居然在论坛上找到了，转载一下。</p>
@@ -535,8 +535,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2018/04/25/实现Watch的Server-Push与Client-Poll方式/" rel="next" title="实现Watch的Server Push与Client Poll方式">
-                <i class="fa fa-chevron-left"></i> 实现Watch的Server Push与Client Poll方式
+              <a href="/2018/01/10/KubeController异步事件处理Infomer的实现/" rel="next" title="KubeController异步事件处理Infomer的实现">
+                <i class="fa fa-chevron-left"></i> KubeController异步事件处理Infomer的实现
               </a>
             
           </div>
@@ -545,8 +545,8 @@
 
           <div class="post-nav-prev post-nav-item">
             
-              <a href="/2018/06/15/服务网格istio的安装和基本概念/" rel="prev" title="服务网格istio的安装和基本概念">
-                服务网格istio的安装和基本概念 <i class="fa fa-chevron-right"></i>
+              <a href="/2018/02/18/IO多路复用与Go网络库的实现/" rel="prev" title="IO多路复用与Go网络库的实现">
+                IO多路复用与Go网络库的实现 <i class="fa fa-chevron-right"></i>
               </a>
             
           </div>
@@ -628,7 +628,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">28</span>
+                  <span class="site-state-item-count">29</span>
                   <span class="site-state-item-name">posts</span>
                 </a>
               </div>
@@ -650,7 +650,7 @@
               
               <div class="site-state-item site-state-tags">
                 <a href="/tags/index.html">
-                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-count">12</span>
                   <span class="site-state-item-name">tags</span>
                 </a>
               </div>
