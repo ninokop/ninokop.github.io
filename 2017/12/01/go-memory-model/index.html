@@ -104,12 +104,12 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="内存管理缓存结构Go实现的内存管理采用了tcmalloc这种架构，并配合goroutine和垃圾回收。tcmalloc的基本策略就是将内存分为多个级别。申请对象优先从最小级别的内存管理集合mcache中获取，若mcache无法命中则需要向mcentral申请一批内存块缓存到本地mcache中，若mcentral无空闲的内存块，则向mheap申请来填充mcentral，最后向系统申请。 mcache">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/12/01/go-memory-model/Go-内存管理/goalloc.png">
-<meta property="og:updated_time" content="2019-05-26T10:40:30.115Z">
+<meta property="og:image" content="http://yoursite.com/2017/12/01/go-memory-model/goalloc.png">
+<meta property="og:updated_time" content="2019-05-27T03:01:36.760Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Go 内存管理">
 <meta name="twitter:description" content="内存管理缓存结构Go实现的内存管理采用了tcmalloc这种架构，并配合goroutine和垃圾回收。tcmalloc的基本策略就是将内存分为多个级别。申请对象优先从最小级别的内存管理集合mcache中获取，若mcache无法命中则需要向mcentral申请一批内存块缓存到本地mcache中，若mcentral无空闲的内存块，则向mheap申请来填充mcentral，最后向系统申请。 mcache">
-<meta name="twitter:image" content="http://yoursite.com/2017/12/01/go-memory-model/Go-内存管理/goalloc.png">
+<meta name="twitter:image" content="http://yoursite.com/2017/12/01/go-memory-model/goalloc.png">
 
 
 
@@ -407,7 +407,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:40:30" itemprop="dateModified" datetime="2019-05-26T18:40:30+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:01:36" itemprop="dateModified" datetime="2019-05-27T11:01:36+08:00">2019-05-27</time>
               
             
           </span>
@@ -473,7 +473,7 @@
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> mheap <span class="keyword">struct</span> &#123;</span><br><span class="line">    lock      mutex</span><br><span class="line">    free      [_MaxMHeapList]mspan <span class="comment">// 页数在127以内的空闲span链表</span></span><br><span class="line">    freelarge mspan            </span><br><span class="line">    spans        **mspan</span><br><span class="line"> </span><br><span class="line">    bitmap         <span class="keyword">uintptr</span></span><br><span class="line">    bitmap_mapped  <span class="keyword">uintptr</span></span><br><span class="line">    arena_start    <span class="keyword">uintptr</span></span><br><span class="line">    arena_used     <span class="keyword">uintptr</span> </span><br><span class="line">    arena_end      <span class="keyword">uintptr</span></span><br><span class="line">    arena_reserved <span class="keyword">bool</span></span><br><span class="line"></span><br><span class="line">    central [_NumSizeClasses]<span class="keyword">struct</span> &#123;</span><br><span class="line">        mcentral mcentral</span><br><span class="line">        pad      [_CacheLineSize]<span class="keyword">byte</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    spanalloc             fixalloc <span class="comment">// allocator for span*</span></span><br><span class="line">    cachealloc            fixalloc <span class="comment">// allocator for mcache*</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <h2 id="内存的初始化"><a href="#内存的初始化" class="headerlink" title="内存的初始化"></a>内存的初始化</h2><p>很早之前看过这个图，当时对他的理解有误，因为看漏了一句话 <code>struct Mcache alloc from &#39;cachealloc&#39; by FixAlloc</code>。就是说用户进程newobject是从下图的arena区域分配的，而runtime层自身管理的结构 比如mcache等是专门设计了fixAlloc来分配的，原因可能是这些runtime层的管理对象类型和长度都相对固定，而且生命周期很长，不适合占用arena区域。</p>
-<img src="/2017/12/01/go-memory-model/Go-内存管理/goalloc.png" style="zoom:40%">
+<img src="/2017/12/01/go-memory-model/goalloc.png" style="zoom:40%">
 
 <h3 id="mallocinit"><a href="#mallocinit" class="headerlink" title="mallocinit"></a>mallocinit</h3><p>通过<code>sysReserve</code> 向系统申请一块连续的内存 <strong>spans+bitmap+arena</strong>。其中arena为各个级别缓存结构提供的分配的内存块，spans是个指针数组用来按照page寻址arena区域。</p>
 <blockquote>

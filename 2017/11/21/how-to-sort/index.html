@@ -104,13 +104,13 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="最近在复习算法。翻出小伙伴在14年写的排序算法开始读，发现自己离开C/C++已经太久到打分号都很不习惯，于是乎打算写个go的堆排快排总结，主要根据标准库的sort包写的，另外刷了几道LeetCode的题目。 Sort Interfacesort的参数是个接口，它实现计算长度，比较以及Swap这三个方法。然后Sort方法根据深度来判断当前排序使用heapSort quickSort还是insertS">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/Heapsort-example.gif">
-<meta property="og:image" content="http://yoursite.com/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/sort.png">
-<meta property="og:updated_time" content="2019-05-26T10:51:25.007Z">
+<meta property="og:image" content="http://yoursite.com/2017/11/21/how-to-sort/Heapsort-example.gif">
+<meta property="og:image" content="http://yoursite.com/2017/11/21/how-to-sort/sort.png">
+<meta property="og:updated_time" content="2019-05-27T02:48:44.912Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Sort排序总结">
 <meta name="twitter:description" content="最近在复习算法。翻出小伙伴在14年写的排序算法开始读，发现自己离开C/C++已经太久到打分号都很不习惯，于是乎打算写个go的堆排快排总结，主要根据标准库的sort包写的，另外刷了几道LeetCode的题目。 Sort Interfacesort的参数是个接口，它实现计算长度，比较以及Swap这三个方法。然后Sort方法根据深度来判断当前排序使用heapSort quickSort还是insertS">
-<meta name="twitter:image" content="http://yoursite.com/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/Heapsort-example.gif">
+<meta name="twitter:image" content="http://yoursite.com/2017/11/21/how-to-sort/Heapsort-example.gif">
 
 
 
@@ -408,7 +408,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:51:25" itemprop="dateModified" datetime="2019-05-26T18:51:25+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 10:48:44" itemprop="dateModified" datetime="2019-05-27T10:48:44+08:00">2019-05-27</time>
               
             
           </span>
@@ -492,7 +492,7 @@
 
 <h3 id="堆的删除"><a href="#堆的删除" class="headerlink" title="堆的删除"></a>堆的删除</h3><p>堆都是从data[0]的地方pop数据，在堆排中显然pop出去的当前无序区最大值将置换到data[n-1]，这时有序区终于有一个值了。然后无序区开始siftDown，堆化后继续pop扩大有序区直到完全有序。</p>
 <p>过程示例 下图转自<a href="http://wuchong.me/blog/2014/02/09/algorithm-sort-summary/" target="_blank" rel="noopener">经典排序算法总结</a></p>
-<p><img src="/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/Heapsort-example.gif" alt="heapsort实例"></p>
+<p><img src="/2017/11/21/how-to-sort/Heapsort-example.gif" alt="heapsort实例"></p>
 <h2 id="QuickSort"><a href="#QuickSort" class="headerlink" title="QuickSort"></a>QuickSort</h2><p>快排和归并都是分治的思路。go的快排通过maxDepth实现了对递归调用深度的限制，不超过<code>lg(b-a)</code>。另外数据len小于等于7时切到了插入排序。</p>
 <blockquote>
 <p>深度的计算</p>
@@ -520,7 +520,7 @@
 <blockquote>
 <p>快排可以实现稳定吗，为什么最坏情况下是O(n^2)，辅助空间怎样计算</p>
 </blockquote>
-<p><img src="/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/sort.png" alt></p>
+<p><img src="/2017/11/21/how-to-sort/sort.png" alt></p>
 <h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><p><a href="http://wuchong.me/blog/2014/02/09/algorithm-sort-summary/" target="_blank" rel="noopener">经典排序算法总结</a></p>
 <p><a href="http://blog.csdn.net/morewindows/article/details/6678165" target="_blank" rel="noopener">白话经典算法系列</a></p>
 <p><a href="https://www.jianshu.com/p/8e6a86f25d4b" target="_blank" rel="noopener">排序问题</a></p>

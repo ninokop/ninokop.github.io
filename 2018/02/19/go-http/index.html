@@ -99,19 +99,19 @@
   <meta name="description" content="HTTP协议HTTP协议是规范服务端和客户端请求应答标准的应用层协议，即它是一个应用层的请求响应协议。客户端的请求和服务端响应共同构成了一次HTTP事务，他们之间的通信通过HTTP报文进行。HTTP1.1的报文是纯文本的，协议规定了报文的格式，报文格式都是起始行+Header+Body的格式，只是请求起始行包含方法+URI，响应起始行是状态码和状态消息。  TCP连接管理在TCP/IP协议族里，H">
 <meta name="keywords" content="network,Golang,HTTP">
 <meta property="og:type" content="article">
-<meta property="og:title" content="HTTP协议与Go的实现">
+<meta property="og:title" content="HTTP协议与go的实现">
 <meta property="og:url" content="http://yoursite.com/2018/02/19/go-http/index.html">
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="HTTP协议HTTP协议是规范服务端和客户端请求应答标准的应用层协议，即它是一个应用层的请求响应协议。客户端的请求和服务端响应共同构成了一次HTTP事务，他们之间的通信通过HTTP报文进行。HTTP1.1的报文是纯文本的，协议规定了报文的格式，报文格式都是起始行+Header+Body的格式，只是请求起始行包含方法+URI，响应起始行是状态码和状态消息。  TCP连接管理在TCP/IP协议族里，H">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2018/02/19/go-http/HTTP%E5%8D%8F%E8%AE%AE%E4%B8%8EGo%E7%9A%84%E5%AE%9E%E7%8E%B0/req_resp.png">
-<meta property="og:image" content="http://yoursite.com/2018/02/19/go-http/HTTP%E5%8D%8F%E8%AE%AE%E4%B8%8EGo%E7%9A%84%E5%AE%9E%E7%8E%B0/frame.jpg">
-<meta property="og:image" content="http://yoursite.com/2018/02/19/go-http/HTTP%E5%8D%8F%E8%AE%AE%E4%B8%8EGo%E7%9A%84%E5%AE%9E%E7%8E%B0/listen_serve.png">
-<meta property="og:updated_time" content="2019-05-26T10:49:05.069Z">
+<meta property="og:image" content="http://yoursite.com/2018/02/19/go-http/go-http/req_resp.png">
+<meta property="og:image" content="http://yoursite.com/2018/02/19/go-http/go-http/frame.jpg">
+<meta property="og:image" content="http://yoursite.com/2018/02/19/go-http/go-http/listen_serve.png">
+<meta property="og:updated_time" content="2019-05-27T03:02:54.863Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="HTTP协议与Go的实现">
+<meta name="twitter:title" content="HTTP协议与go的实现">
 <meta name="twitter:description" content="HTTP协议HTTP协议是规范服务端和客户端请求应答标准的应用层协议，即它是一个应用层的请求响应协议。客户端的请求和服务端响应共同构成了一次HTTP事务，他们之间的通信通过HTTP报文进行。HTTP1.1的报文是纯文本的，协议规定了报文的格式，报文格式都是起始行+Header+Body的格式，只是请求起始行包含方法+URI，响应起始行是状态码和状态消息。  TCP连接管理在TCP/IP协议族里，H">
-<meta name="twitter:image" content="http://yoursite.com/2018/02/19/go-http/HTTP%E5%8D%8F%E8%AE%AE%E4%B8%8EGo%E7%9A%84%E5%AE%9E%E7%8E%B0/req_resp.png">
+<meta name="twitter:image" content="http://yoursite.com/2018/02/19/go-http/go-http/req_resp.png">
 
 
 
@@ -129,7 +129,7 @@
   };
 </script>
 
-  <title>HTTP协议与Go的实现 | nino's blog</title>
+  <title>HTTP协议与go的实现 | nino's blog</title>
   
 
 
@@ -366,7 +366,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">HTTP协议与Go的实现
+          <h1 class="post-title" itemprop="name headline">HTTP协议与go的实现
 
               
             
@@ -409,7 +409,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:49:05" itemprop="dateModified" datetime="2019-05-26T18:49:05+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:02:54" itemprop="dateModified" datetime="2019-05-27T11:02:54+08:00">2019-05-27</time>
               
             
           </span>
@@ -462,7 +462,7 @@
 
       
         <h2 id="HTTP协议"><a href="#HTTP协议" class="headerlink" title="HTTP协议"></a>HTTP协议</h2><p>HTTP协议是规范服务端和客户端请求应答标准的应用层协议，即它是一个<strong>应用层的请求响应协议</strong>。客户端的请求和服务端响应共同构成了一次HTTP事务，他们之间的通信通过HTTP报文进行。HTTP1.1的报文是<strong>纯文本</strong>的，协议规定了报文的格式，报文格式都是起始行+Header+Body的格式，只是请求起始行包含方法+URI，响应起始行是状态码和状态消息。</p>
-<p><img src="/2018/02/19/go-http/HTTP%E5%8D%8F%E8%AE%AE%E4%B8%8EGo%E7%9A%84%E5%AE%9E%E7%8E%B0/req_resp.png" alt></p>
+<p><img src="go-http/req_resp.png" alt></p>
 <h3 id="TCP连接管理"><a href="#TCP连接管理" class="headerlink" title="TCP连接管理"></a>TCP连接管理</h3><p>在TCP/IP协议族里，HTTP协议是基于TCP这个传输层协议的。即虽然<strong>HTTP本身无状态</strong>，TCP为他提供了可靠面向连接的传输，HTTP发送请求需要先建立底层的TCP连接。本节总结跟HTTP性能相关的TCP时延。</p>
 <ul>
 <li><strong>TCP建立连接时延</strong> client发起HTTP请求，可能会在TCP建立连接的过程消耗50%以上的时间，因此http的client侧应该重用现有的连接来减小影响。</li>
@@ -472,7 +472,7 @@
 <li><strong>TIME_WAIT累积和端口耗尽</strong> </li>
 </ul>
 <h3 id="HTTP2的区别"><a href="#HTTP2的区别" class="headerlink" title="HTTP2的区别"></a>HTTP2的区别</h3><p>首先HTTP2 的引入时为了解决HTTP1.X的一些问题或缺陷，它虽然保留了HTTP Header等协议格式，但在tcp层上通过binary帧层把数据做了进一步封装，最终传输在连接上的是二进制数据。</p>
-<p><img src="/2018/02/19/go-http/HTTP%E5%8D%8F%E8%AE%AE%E4%B8%8EGo%E7%9A%84%E5%AE%9E%E7%8E%B0/frame.jpg" alt></p>
+<p><img src="go-http/frame.jpg" alt></p>
 <ol>
 <li>HTTP1.X时代Server端实现主动推送，需要引入类似long poll，web socket等折中方式。HTTP2的编码格式和传输协议天然支持Server Push，不需要Chunked编码等等。</li>
 <li>head-Of-Blocking问题：不支持真正的基于一个连接的并行多会话。HTTP1.X在同一个TCPconn上Transport同时只有一个roundTrip在运行，并发的请求时通过另外创建连接以及连接复用来实现的。HTTP2支持多路复用，通过streamID实现在同一个连接上处理不同stream的消息，消息间通过id区分。非常自然的实现了TCP的单连接。</li>
@@ -494,7 +494,7 @@
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">sayHello</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">    log.Print(<span class="string">"req [%v]"</span>, *r)</span><br><span class="line">    fmt.Fprintln(w, <span class="string">"hello world"</span>)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    http.HandleFunc(<span class="string">"/"</span>, sayHello)</span><br><span class="line">    err := http.ListenAndServe(<span class="string">":8080"</span>, <span class="literal">nil</span>)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Fatal(<span class="string">"ListenAndServe error"</span>, err)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <h3 id="listen-amp-serve"><a href="#listen-amp-serve" class="headerlink" title="listen &amp; serve"></a>listen &amp; serve</h3><p><code>http.ListenAndServe</code>通过net.Listen建立tcpListener，服务端可以进入accept循环，只要有listenFD上有accept新的TCPconn，<strong>每个TCPconn会通过newConn封装为一个server侧的httpConn，并通过new goroutine分发这次httpConn的相关处理。</strong>看起来go server是同步阻塞的方式，相关原理可参考我之前写的<a href="https://ninokop.github.io/2018/03/18/IO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E4%B8%8EGo%E7%BD%91%E7%BB%9C%E5%BA%93%E7%9A%84%E5%AE%9E%E7%8E%B0/" target="_blank" rel="noopener">IO多路复用与Go网络库的实现</a>。最外层的过程如图所示，下图转自<a href>go-web编程</a>。</p>
-<p><img src="/2018/02/19/go-http/HTTP%E5%8D%8F%E8%AE%AE%E4%B8%8EGo%E7%9A%84%E5%AE%9E%E7%8E%B0/listen_serve.png" alt></p>
+<p><img src="go-http/listen_serve.png" alt></p>
 <blockquote>
 <p>默认accept的rw设置了keepalive，时间默认为3分钟。</p>
 </blockquote>

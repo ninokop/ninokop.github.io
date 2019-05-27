@@ -104,13 +104,13 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="CSAPP ch12总结了三种并发模型：基于进程，基于IO多路复用，基于线程。在实际的服务器应用中基于线程的并发模型并不能创建和使用过多的thread。因为thread数目过多于CPU核数，内核调度和切换thread将付出较大代价。因此通常在基于线程的基础上，在用户态设计用户态线程模型与调度器，使得调度不需要陷入内核完成，减小并发调度代价。 调度器的设计与演化用户态线程模型又根据多少个协程对应OS">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/12/10/read-goroutine/Goroutine浅析/thread-pool.png">
-<meta property="og:image" content="http://yoursite.com/2017/12/10/read-goroutine/Goroutine浅析/g-p-m.png">
-<meta property="og:updated_time" content="2019-05-26T10:43:32.405Z">
+<meta property="og:image" content="http://yoursite.com/2017/12/10/read-goroutine/thread-pool.png">
+<meta property="og:image" content="http://yoursite.com/2017/12/10/read-goroutine/g-p-m.png">
+<meta property="og:updated_time" content="2019-05-27T02:45:09.738Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Goroutine浅析">
 <meta name="twitter:description" content="CSAPP ch12总结了三种并发模型：基于进程，基于IO多路复用，基于线程。在实际的服务器应用中基于线程的并发模型并不能创建和使用过多的thread。因为thread数目过多于CPU核数，内核调度和切换thread将付出较大代价。因此通常在基于线程的基础上，在用户态设计用户态线程模型与调度器，使得调度不需要陷入内核完成，减小并发调度代价。 调度器的设计与演化用户态线程模型又根据多少个协程对应OS">
-<meta name="twitter:image" content="http://yoursite.com/2017/12/10/read-goroutine/Goroutine浅析/thread-pool.png">
+<meta name="twitter:image" content="http://yoursite.com/2017/12/10/read-goroutine/thread-pool.png">
 
 
 
@@ -408,7 +408,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:43:32" itemprop="dateModified" datetime="2019-05-26T18:43:32+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 10:45:09" itemprop="dateModified" datetime="2019-05-27T10:45:09+08:00">2019-05-27</time>
               
             
           </span>
@@ -469,7 +469,7 @@
 <li>M用到的<code>mCache</code>是属于内核线程的，当M阻塞后相应的内存资源仍被占用着。</li>
 <li>由于syscall造成的过多M阻塞和恢复。</li>
 </ul>
-<img src="/2017/12/10/read-goroutine/Goroutine浅析/thread-pool.png" style="zoom:38%">
+<img src="/2017/12/10/read-goroutine/thread-pool.png" style="zoom:38%">
 
 <h3 id="G-P-M-Model"><a href="#G-P-M-Model" class="headerlink" title="G-P-M Model"></a>G-P-M Model</h3><p>为了解决上面的问题，Go1.1以后通过<strong>work stealing</strong>算法实现了<code>M:N</code>的<strong>G-P-M</strong>模型。它通过引入逻辑<strong>Processer P</strong>来解决G-M模型的几大问题。</p>
 <ul>
@@ -477,7 +477,7 @@
 <li>G存在于P队列中。当某个M陷入系统调用时，P将与M解绑定，并找另外的M（或创建新M）来执行G的代码，避免G在M之间传递。</li>
 <li>P给M运行提供了运行所需的mCache内存，当PM解绑时将收回内存。</li>
 </ul>
-<img src="/2017/12/10/read-goroutine/Goroutine浅析/g-p-m.png" style="zoom:38%">
+<img src="/2017/12/10/read-goroutine/g-p-m.png" style="zoom:38%">
 
 <h3 id="Data-Structure"><a href="#Data-Structure" class="headerlink" title="Data Structure"></a>Data Structure</h3><p><code>G</code>代表goroutine，它通过go关键字调用<code>runtime.newProc</code>创建，创建后即被放在P本地队列或全局队列中，等待被执行。它存储了goroutine执行的栈信息，状态，任务函数。其中执行的func入口保存在<code>startPC</code>域。由于它可以被任何P获取并执行，G在<code>stack</code>字段保存了goroutine栈的可用空间。在<code>sched</code>域保存了goroutine切换所需的全部上下文。</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> g <span class="keyword">struct</span> &#123;</span><br><span class="line">	stack       stack   <span class="comment">// offset known to runtime/cgo</span></span><br><span class="line">	stackguard0 <span class="keyword">uintptr</span> <span class="comment">// offset known to liblink</span></span><br><span class="line">	stackguard1 <span class="keyword">uintptr</span> <span class="comment">// offset known to liblink</span></span><br><span class="line"></span><br><span class="line">	m              *m      <span class="comment">// current m</span></span><br><span class="line">	stackAlloc     <span class="keyword">uintptr</span> <span class="comment">// [stack.lo,stack.lo+stackAlloc)</span></span><br><span class="line">	sched          gobuf</span><br><span class="line">	</span><br><span class="line">	goid           <span class="keyword">int64</span></span><br><span class="line">	waitsince      <span class="keyword">int64</span>  <span class="comment">// approx time when g blocked</span></span><br><span class="line">	waitreason     <span class="keyword">string</span> <span class="comment">// if status==Gwaiting</span></span><br><span class="line">	schedlink      guintptr</span><br><span class="line">	preempt        <span class="keyword">bool</span>   <span class="comment">// preemption signal</span></span><br><span class="line">	lockedm        *m</span><br><span class="line">	gopc           <span class="keyword">uintptr</span> <span class="comment">// pc of go statement</span></span><br><span class="line">	startpc        <span class="keyword">uintptr</span> <span class="comment">// pc of goroutine function</span></span><br><span class="line"></span><br><span class="line">	readyg         *g     <span class="comment">// scratch for readyExecute</span></span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>

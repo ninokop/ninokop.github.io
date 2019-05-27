@@ -104,12 +104,12 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="Remote Procedure CallRPC是一种进程间通信协议，它允许程序调用另一个地址空间的过程或函数。开发RPC的动机和核心问题就是如何执行另外一个地址空间上的函数和方法，就像本地调用一样。 在网络通信中，RPC相当于一种约束Request和Response的协议。目前RPC框架大致有两种不同的侧重，一种是偏向于服务治理，提供了丰富的功能，适用于大型服务的微服务拆分和管理，另一种侧重于跨">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2018/03/27/go-rpc/%E8%AE%B0go-RPC%E7%9A%84%E5%AE%9E%E7%8E%B0/rpc.png">
-<meta property="og:updated_time" content="2019-05-26T10:53:30.223Z">
+<meta property="og:image" content="http://yoursite.com/2018/03/27/go-rpc/rpc.png">
+<meta property="og:updated_time" content="2019-05-27T03:00:29.845Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="记go-RPC的实现">
 <meta name="twitter:description" content="Remote Procedure CallRPC是一种进程间通信协议，它允许程序调用另一个地址空间的过程或函数。开发RPC的动机和核心问题就是如何执行另外一个地址空间上的函数和方法，就像本地调用一样。 在网络通信中，RPC相当于一种约束Request和Response的协议。目前RPC框架大致有两种不同的侧重，一种是偏向于服务治理，提供了丰富的功能，适用于大型服务的微服务拆分和管理，另一种侧重于跨">
-<meta name="twitter:image" content="http://yoursite.com/2018/03/27/go-rpc/%E8%AE%B0go-RPC%E7%9A%84%E5%AE%9E%E7%8E%B0/rpc.png">
+<meta name="twitter:image" content="http://yoursite.com/2018/03/27/go-rpc/rpc.png">
 
 
 
@@ -407,7 +407,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:53:30" itemprop="dateModified" datetime="2019-05-26T18:53:30+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:00:29" itemprop="dateModified" datetime="2019-05-27T11:00:29+08:00">2019-05-27</time>
               
             
           </span>
@@ -461,7 +461,7 @@
       
         <h2 id="Remote-Procedure-Call"><a href="#Remote-Procedure-Call" class="headerlink" title="Remote Procedure Call"></a>Remote Procedure Call</h2><p>RPC是一种进程间通信协议，它允许程序调用另一个地址空间的过程或函数。<strong>开发RPC的动机和核心问题就是如何执行另外一个地址空间上的函数和方法，就像本地调用一样。</strong></p>
 <p>在网络通信中，RPC相当于一种约束Request和Response的协议。目前RPC框架大致有两种不同的侧重，一种是偏向于服务治理，提供了丰富的功能，适用于大型服务的微服务拆分和管理，另一种侧重于跨语言调用，比如gRPC。<a href="https://smallnest.gitbooks.io/go-rpc-programming-guide/content/" target="_blank" rel="noopener">smallnest.gitbooks.io/go-rpc</a>讨论了国内外许多RPC框架，总结了RPC调用的基本过程如下</p>
-<p><img src="/2018/03/27/go-rpc/%E8%AE%B0go-RPC%E7%9A%84%E5%AE%9E%E7%8E%B0/rpc.png" alt></p>
+<p><img src="/2018/03/27/go-rpc/rpc.png" alt></p>
 <blockquote>
 <p>个人理解RPC就是描述client server间点对点的通信过程，它要实现stub，通信和消息解析三个部分。下面就从这三个方面记录下go标准库的RPC是怎么实现这三部分的。</p>
 </blockquote>

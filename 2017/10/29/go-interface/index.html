@@ -104,13 +104,13 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="在比较C++和Go的时候，通常会说到Go不支持继承和多态，但通过组合和接口实现了类似的语言特性。总结一下Go不支持的原因：(1) 首先struct是值类型，赋值和传参都会复制全部内容。struct的内存布局跟C几乎一致，没有任何附加的object信息，比如指向虚函数表的指针。(2)其次Go不支持隐式的类型转换，因此用基类的指针指向子类会编译错误。  Go程序抽象的基本原则依赖于接口而不是实现，优先">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/10/29/go-interface/Go-方法调用与接口/gdb.png">
-<meta property="og:image" content="http://yoursite.com/2017/10/29/go-interface/Go-方法调用与接口/itab.png">
-<meta property="og:updated_time" content="2019-05-26T10:42:46.423Z">
+<meta property="og:image" content="http://yoursite.com/2017/10/29/go-interface/gdb.png">
+<meta property="og:image" content="http://yoursite.com/2017/10/29/go-interface/itab.png">
+<meta property="og:updated_time" content="2019-05-27T03:02:02.092Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Go 方法调用与接口">
 <meta name="twitter:description" content="在比较C++和Go的时候，通常会说到Go不支持继承和多态，但通过组合和接口实现了类似的语言特性。总结一下Go不支持的原因：(1) 首先struct是值类型，赋值和传参都会复制全部内容。struct的内存布局跟C几乎一致，没有任何附加的object信息，比如指向虚函数表的指针。(2)其次Go不支持隐式的类型转换，因此用基类的指针指向子类会编译错误。  Go程序抽象的基本原则依赖于接口而不是实现，优先">
-<meta name="twitter:image" content="http://yoursite.com/2017/10/29/go-interface/Go-方法调用与接口/gdb.png">
+<meta name="twitter:image" content="http://yoursite.com/2017/10/29/go-interface/gdb.png">
 
 
 
@@ -408,7 +408,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:42:46" itemprop="dateModified" datetime="2019-05-26T18:42:46+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:02:02" itemprop="dateModified" datetime="2019-05-27T11:02:02+08:00">2019-05-27</time>
               
             
           </span>
@@ -497,12 +497,12 @@
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Duck <span class="keyword">interface</span> &#123;</span><br><span class="line">	GaGaSpeaking()</span><br><span class="line">	OfficialWalking()</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> Actor <span class="keyword">interface</span> &#123;</span><br><span class="line">	MakeFun()</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> DonaldDuck <span class="keyword">struct</span> &#123;</span><br><span class="line">	height <span class="keyword">uint</span></span><br><span class="line">	name   <span class="keyword">string</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dd *DonaldDuck)</span> <span class="title">GaGaSpeaking</span><span class="params">()</span></span> &#123; fmt.Println(<span class="string">"DonaldDuck gaga"</span>) &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dd *DonaldDuck)</span> <span class="title">OfficialWalking</span><span class="params">()</span></span> &#123; fmt.Println(<span class="string">"DonaldDuck walk"</span>) &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(dd *DonaldDuck)</span> <span class="title">MakeFun</span><span class="params">()</span></span> &#123; fmt.Println(<span class="string">"DonaldDuck make fun"</span>) &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	dd := &amp;DonaldDuck&#123;<span class="number">10</span>, <span class="string">"tang lao ya"</span>&#125;</span><br><span class="line">	<span class="keyword">var</span> duck Duck = dd</span><br><span class="line">	<span class="keyword">var</span> actor Actor = dd</span><br><span class="line">	duck.GaGaSpeaking()</span><br><span class="line">	actor.MakeFun()</span><br><span class="line">	dd.OfficialWalking()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <p>可以看出来当dd赋值给接口Duck后，接口duck的<strong>data域</strong>保存的地址就是dd对象指向的地址。<strong>tab域</strong>的inter字段里保存了实现这个接口的两个<strong>方法声明</strong>，其中name保存了方法的名字。<strong>tab域</strong>的func指针指向了具体实现，即这个符号对应的代码段<code>.text</code>地址。</p>
-<img src="/2017/10/29/go-interface/Go-方法调用与接口/gdb.png" style="zoom:90%">
+<img src="/2017/10/29/go-interface/gdb.png" style="zoom:90%">
 
 <blockquote>
 <p><font color="#1E90FF">具体T类型到Iface的转换涉及到3个内容的复制</font> (1) iface的tab域的func字段保存T类型的方法集，即对tab域inter声明的方法的实现。(2) iface的data域指针指向用于赋值的对象的副本。(3) iface的tab域的_type字段保存T类型的_type。</p>
 </blockquote>
-<img src="/2017/10/29/go-interface/Go-方法调用与接口/itab.png" style="zoom:40%">
+<img src="/2017/10/29/go-interface/itab.png" style="zoom:40%">
 
 <h3 id="编译期检测"><a href="#编译期检测" class="headerlink" title="编译期检测"></a>编译期检测</h3><p>当T类型没有实现I接口中所有方法时，从T到I的赋值将抛出<code>TypeAssertionError</code>编译错误。检查的方法在函数additab当中，即查看T类型的<strong>_type</strong>方法表<strong>uncommentType</strong>是否包含了I接口<strong>interfacetype</strong>中所有的<strong>imethod</strong>，同时将T类型对方法的实现拷贝到tab的<strong>func</strong>指向的表中。</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> _type <span class="keyword">struct</span> &#123;</span><br><span class="line">	size       <span class="keyword">uintptr</span></span><br><span class="line">	ptrdata    <span class="keyword">uintptr</span> <span class="comment">// size of memory prefix holding all pointers</span></span><br><span class="line">	hash       <span class="keyword">uint32</span></span><br><span class="line">	_unused    <span class="keyword">uint8</span></span><br><span class="line">	align      <span class="keyword">uint8</span></span><br><span class="line">	fieldalign <span class="keyword">uint8</span></span><br><span class="line">	kind       <span class="keyword">uint8</span></span><br><span class="line">	alg        *typeAlg</span><br><span class="line">	gcdata  *<span class="keyword">byte</span></span><br><span class="line">	_string *<span class="keyword">string</span></span><br><span class="line">	x       *uncommontype</span><br><span class="line">	ptrto   *_type</span><br><span class="line">	zero    *<span class="keyword">byte</span> <span class="comment">// ptr to the zero value for this type</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> uncommontype <span class="keyword">struct</span> &#123;</span><br><span class="line">	name    *<span class="keyword">string</span></span><br><span class="line">	pkgpath *<span class="keyword">string</span></span><br><span class="line">	mhdr    []method</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>

@@ -99,18 +99,18 @@
   <meta name="description" content="gRPC-BalancergPRC没有提供Balancer的实现，但给出了接口。基本原理是gRPC的client端为它要访问的target地址维护了ClientConn。在没有Balancer时这个ClientConn的conns只有一个address和它对应的一个连接，当有Balancer时Balancer会给出target对应的一组地址列表，ClientConn要维护这组地址对应的所有连接。">
 <meta name="keywords" content="micro-service,RPC">
 <meta property="og:type" content="article">
-<meta property="og:title" content="gRPC负载均衡浅析">
+<meta property="og:title" content="grpc负载均衡浅析">
 <meta property="og:url" content="http://yoursite.com/2017/11/12/grpc-loadbalance/index.html">
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="gRPC-BalancergPRC没有提供Balancer的实现，但给出了接口。基本原理是gRPC的client端为它要访问的target地址维护了ClientConn。在没有Balancer时这个ClientConn的conns只有一个address和它对应的一个连接，当有Balancer时Balancer会给出target对应的一组地址列表，ClientConn要维护这组地址对应的所有连接。">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/grpc-lb.png">
-<meta property="og:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/hash-ring.png">
-<meta property="og:updated_time" content="2019-05-26T10:48:14.604Z">
+<meta property="og:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/grpc-lb.png">
+<meta property="og:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/hash-ring.png">
+<meta property="og:updated_time" content="2019-05-27T02:49:12.678Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="gRPC负载均衡浅析">
+<meta name="twitter:title" content="grpc负载均衡浅析">
 <meta name="twitter:description" content="gRPC-BalancergPRC没有提供Balancer的实现，但给出了接口。基本原理是gRPC的client端为它要访问的target地址维护了ClientConn。在没有Balancer时这个ClientConn的conns只有一个address和它对应的一个连接，当有Balancer时Balancer会给出target对应的一组地址列表，ClientConn要维护这组地址对应的所有连接。">
-<meta name="twitter:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/grpc-lb.png">
+<meta name="twitter:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/grpc-lb.png">
 
 
 
@@ -128,7 +128,7 @@
   };
 </script>
 
-  <title>gRPC负载均衡浅析 | nino's blog</title>
+  <title>grpc负载均衡浅析 | nino's blog</title>
   
 
 
@@ -365,7 +365,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">gRPC负载均衡浅析
+          <h1 class="post-title" itemprop="name headline">grpc负载均衡浅析
 
               
             
@@ -408,7 +408,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:48:14" itemprop="dateModified" datetime="2019-05-26T18:48:14+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 10:49:12" itemprop="dateModified" datetime="2019-05-27T10:49:12+08:00">2019-05-27</time>
               
             
           </span>
@@ -461,7 +461,7 @@
 
       
         <h2 id="gRPC-Balancer"><a href="#gRPC-Balancer" class="headerlink" title="gRPC-Balancer"></a>gRPC-Balancer</h2><p>gPRC没有提供Balancer的实现，但给出了接口。基本原理是<strong>gRPC的client端为它要访问的target地址维护了ClientConn</strong>。在没有Balancer时这个ClientConn的conns只有一个address和它对应的一个连接，当有Balancer时Balancer会给出target对应的一组地址列表，ClientConn要维护这组地址对应的所有连接。</p>
-<p><img src="/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/grpc-lb.png" alt="grpc-lb"></p>
+<p><img src="/2017/11/12/grpc-loadbalance/grpc-lb.png" alt="grpc-lb"></p>
 <ul>
 <li><strong>Balancer根据Resolver去Watch具体target的地址信息变化，并通知clientConn更新它的缓存</strong>。这是通过Balancer的Start&amp;Notify方法实现的，它初始化Resolver，并开始Watch注册中心，Watch的事件将用来更新Balancer自身的addr缓存，并通过Notify通知clientConn更新整个连接池的缓存。</li>
 </ul>
@@ -523,7 +523,7 @@
 <blockquote>
 <p>基本原理是hash ring，即将节点node本身也hash到环上，通过数据和节点的hash相对位置来决定数据归属，因此当有新node加入时只有一部分的数据迁移。但事实上，这样的一致性hash导致数据分布不均匀，因为node在hash ring上的分布不均匀。分布不均匀的问题通过引入虚拟节点来解决，虚拟节点是均匀分布在ring上的，数据做两次match，最终到实际节点上。这样来保证数据分布的均匀性。</p>
 </blockquote>
-<p><img src="/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/hash-ring.png" alt="grpc-lb"></p>
+<p><img src="/2017/11/12/grpc-loadbalance/hash-ring.png" alt="grpc-lb"></p>
 <p><a href="https://github.com/golang/groupcache" target="_blank" rel="noopener">groupcache</a>有个consistenthash的实现，<a href="https://github.com/royhunter/ConsistentHash" target="_blank" rel="noopener">royhunter</a>有个带虚拟节点的实现。以groupcache为例，默认HashFunc是<code>crc32.ChecksumIEEE</code>。<code>keys</code>相当于是<code>hashRing</code>，replicas相当于虚拟节点。</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Hash <span class="function"><span class="keyword">func</span><span class="params">(data []<span class="keyword">byte</span>)</span> <span class="title">uint32</span></span></span><br><span class="line"><span class="function"><span class="title">type</span> <span class="title">Map</span> <span class="title">struct</span></span> &#123;</span><br><span class="line">    hash     Hash</span><br><span class="line">    replicas <span class="keyword">int</span></span><br><span class="line">    keys     []<span class="keyword">int</span> <span class="comment">// Sorted</span></span><br><span class="line">    hashMap  <span class="keyword">map</span>[<span class="keyword">int</span>]<span class="keyword">string</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 

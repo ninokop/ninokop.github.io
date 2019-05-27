@@ -104,13 +104,13 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="对比C++，Go不支持支持重载和默认参数，支持不定长变参，多返回值，匿名函数和闭包。 C入栈顺序和返回值之前有个疑问，为什么Go支持多返回值，而C不行呢。首先回顾一下C函数调用时的栈空间 程序员的自我修养Ch10-2。函数调用时首先参数和返回地址入栈，其次入栈old ebp和需要保存的寄存器，之后是函数内部的局部变量和其他数据。两个指针ebp和esp分别指向返回地址和栈顶。  函数返回值的传递有多">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/10/26/go-function/Go-函数调用惯例/return.png">
-<meta property="og:image" content="http://yoursite.com/2017/10/26/go-function/Go-%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E6%83%AF%E4%BE%8B/benchmark_test.png">
-<meta property="og:updated_time" content="2019-05-26T10:41:01.934Z">
+<meta property="og:image" content="http://yoursite.com/2017/10/26/go-function/return.png">
+<meta property="og:image" content="http://yoursite.com/2017/10/26/go-function/benchmark_test.png">
+<meta property="og:updated_time" content="2019-05-27T03:04:16.070Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Go 函数调用惯例">
 <meta name="twitter:description" content="对比C++，Go不支持支持重载和默认参数，支持不定长变参，多返回值，匿名函数和闭包。 C入栈顺序和返回值之前有个疑问，为什么Go支持多返回值，而C不行呢。首先回顾一下C函数调用时的栈空间 程序员的自我修养Ch10-2。函数调用时首先参数和返回地址入栈，其次入栈old ebp和需要保存的寄存器，之后是函数内部的局部变量和其他数据。两个指针ebp和esp分别指向返回地址和栈顶。  函数返回值的传递有多">
-<meta name="twitter:image" content="http://yoursite.com/2017/10/26/go-function/Go-函数调用惯例/return.png">
+<meta name="twitter:image" content="http://yoursite.com/2017/10/26/go-function/return.png">
 
 
 
@@ -408,7 +408,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:41:01" itemprop="dateModified" datetime="2019-05-26T18:41:01+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:04:16" itemprop="dateModified" datetime="2019-05-27T11:04:16+08:00">2019-05-27</time>
               
             
           </span>
@@ -465,7 +465,7 @@
 <blockquote>
 <p>函数返回值的传递有多种情况。若小于4字节，返回值存入eax寄存器，由函数调用方读取eax。若返回值5到8字节，采用eax和edx联合返回。若大于8个字节，首先在栈上额外开辟一部分空间temp，将temp对象的地址做为隐藏参数入栈。函数返回时将数据拷贝给temp对象，并将temp对象的地址用寄存器eax传出。调用方从eax指向的temp对象拷贝内容。</p>
 </blockquote>
-<img src="/2017/10/26/go-function/Go-函数调用惯例/return.png" style="zoom:80%">
+<img src="/2017/10/26/go-function/return.png" style="zoom:80%">
 
 <h2 id="Go的多返回值实现"><a href="#Go的多返回值实现" class="headerlink" title="Go的多返回值实现"></a>Go的多返回值实现</h2><p>C需要多返回值的时候，通常是显示的将返回值存放的地址作为参数传递给函数。Go的调用惯例和C不同，Go把<strong>ret1和ret2在参数arg1 arg2之前入栈并保留空位</strong>，被调用方将返回值放在这两个空位上。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">f</span><span class="params">(<span class="keyword">int</span> arg1, <span class="keyword">int</span> arg2, <span class="keyword">int</span> *ret, <span class="keyword">int</span> *ret2)</span></span></span><br><span class="line"><span class="function">func <span class="title">f</span><span class="params">(arg1, arg2 <span class="keyword">int</span>)</span> <span class="params">(ret1, ret2 <span class="keyword">int</span>)</span></span></span><br></pre></td></tr></table></figure>
@@ -498,7 +498,7 @@
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">fund test() &#123;</span><br><span class="line">  x, y := <span class="number">10</span>, <span class="number">20</span></span><br><span class="line">  <span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">(i <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    fmt.Println(<span class="string">"defer:"</span>, i, y) <span class="comment">// output: 10 120</span></span><br><span class="line">  &#125;(x)</span><br><span class="line">  </span><br><span class="line">  x += <span class="number">10</span></span><br><span class="line">  y += <span class="number">100</span></span><br><span class="line">  fmt.Println(x, y) <span class="comment">// output: 20 120</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <h3 id="defer的性能"><a href="#defer的性能" class="headerlink" title="defer的性能"></a>defer的性能</h3><p>简单的BenchmarkTest测试发现滥用defer可能会导致性能问题，尤其在大循环中。</p>
-<p><img src="/2017/10/26/go-function/Go-%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E6%83%AF%E4%BE%8B/benchmark_test.png" alt></p>
+<p><img src="/2017/10/26/go-function/benchmark_test.png" alt></p>
 <p>参考文章 <a href="https://github.com/qyuhen/book" target="_blank" rel="noopener">Go学习笔记</a></p>
 
       

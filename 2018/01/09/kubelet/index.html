@@ -100,16 +100,16 @@
 <meta name="keywords" content="Kubernetes">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Kubelet数据源的合并">
-<meta property="og:url" content="http://yoursite.com/2018/01/09/kubelete/index.html">
+<meta property="og:url" content="http://yoursite.com/2018/01/09/kubelet/index.html">
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="Kubelet的功能简单总结就是根据系统中pod的变化，来处理pod的生命周期。它向下通过底层docker等接口处理pod的启动 更新停止，它向上通过list watch获取pod的信息来做任务识别和分发。这一节主要总结下kubelet三个数据来源合并的过程，代码参考1.7版本，是17年写的了，最近整理搬运到博客。 kubelet的Pod来源有三个，分别是manifest http以及apiser">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2018/01/09/kubelete/Kubelet%E6%95%B0%E6%8D%AE%E6%BA%90%E7%9A%84%E5%90%88%E5%B9%B6/channel.jpg">
-<meta property="og:updated_time" content="2019-05-26T10:50:58.152Z">
+<meta property="og:image" content="http://yoursite.com/2018/01/09/kubelet/channel.jpg">
+<meta property="og:updated_time" content="2019-05-27T02:46:11.045Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Kubelet数据源的合并">
 <meta name="twitter:description" content="Kubelet的功能简单总结就是根据系统中pod的变化，来处理pod的生命周期。它向下通过底层docker等接口处理pod的启动 更新停止，它向上通过list watch获取pod的信息来做任务识别和分发。这一节主要总结下kubelet三个数据来源合并的过程，代码参考1.7版本，是17年写的了，最近整理搬运到博客。 kubelet的Pod来源有三个，分别是manifest http以及apiser">
-<meta name="twitter:image" content="http://yoursite.com/2018/01/09/kubelete/Kubelet%E6%95%B0%E6%8D%AE%E6%BA%90%E7%9A%84%E5%90%88%E5%B9%B6/channel.jpg">
+<meta name="twitter:image" content="http://yoursite.com/2018/01/09/kubelet/channel.jpg">
 
 
 
@@ -117,7 +117,7 @@
 
   
   
-  <link rel="canonical" href="http://yoursite.com/2018/01/09/kubelete/">
+  <link rel="canonical" href="http://yoursite.com/2018/01/09/kubelet/">
 
 
 
@@ -347,7 +347,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/01/09/kubelete/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/01/09/kubelet/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="nino">
@@ -407,7 +407,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:50:58" itemprop="dateModified" datetime="2019-05-26T18:50:58+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 10:46:11" itemprop="dateModified" datetime="2019-05-27T10:46:11+08:00">2019-05-27</time>
               
             
           </span>
@@ -461,7 +461,7 @@
       
         <p>Kubelet的功能简单总结就是根据系统中pod的变化，来处理pod的生命周期。它向下通过底层docker等接口处理pod的启动 更新停止，它向上通过list watch获取pod的信息来做任务识别和分发。这一节主要总结下kubelet三个数据来源合并的过程，代码参考1.7版本，是17年写的了，最近整理搬运到博客。</p>
 <p>kubelet的Pod来源有三个，分别是manifest http以及apiserver。三者通过mux提供的三个channel给mux发送event。mux中开启三个协程去分别处理每种source到来的event，也就是pod。mux的处理过程就是将chan上收到的pod交给podstorage去merge。merge的过程就是跟本地的pod缓存比较，然后分解出不同事件往podstorage的update chan上统一的发送事件。这个chan通过<code>Updates()</code>方法被<code>kubelet.Run</code>使用。</p>
-<p><img src="/2018/01/09/kubelete/Kubelet%E6%95%B0%E6%8D%AE%E6%BA%90%E7%9A%84%E5%90%88%E5%B9%B6/channel.jpg" alt="chan数据流"></p>
+<p><img src="/2018/01/09/kubelet/channel.jpg" alt="chan数据流"></p>
 <h2 id="Kubelet的启动"><a href="#Kubelet的启动" class="headerlink" title="Kubelet的启动"></a>Kubelet的启动</h2><p>Kubelet的工作原理是通过三种途径获得Pod，由<code>KubeletBootstrap</code>实现的Run方法根据事件种类的不同来分发和处理Pod。其中连接具体工作和Pod来源的通道是<code>podCfg.Updates()</code>返回的chan。今天总结下ListWatch结果和Kubelet主线程之间通信的过程。</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">startKubelet</span><span class="params">(k kubelet.KubeletBootstrap, podCfg *config.PodConfig)</span></span> &#123;</span><br><span class="line">    <span class="comment">// start the kubelet</span></span><br><span class="line">    <span class="keyword">go</span> wait.Until(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123; k.Run(podCfg.Updates()) &#125;, <span class="number">0</span>, wait.NeverStop)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 

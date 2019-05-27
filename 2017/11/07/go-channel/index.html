@@ -104,12 +104,12 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="channel作为goroutine间通信和同步的重要途径，是Go runtime层实现CSP并发模型重要的成员。在不理解底层实现时，经常在使用中对channe相关语法的表现感到疑惑，尤其是select case的行为。因此在了解channel的应用前先看一眼channel的实现。 Channel内存布局channel是go的内置类型，它可以被存储到变量中，可以作为函数的参数或返回值，它在runt">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/11/07/go-channel/Go-Channel的实现/channel.png">
-<meta property="og:updated_time" content="2019-05-26T10:32:15.627Z">
+<meta property="og:image" content="http://yoursite.com/2017/11/07/go-channel/channel.png">
+<meta property="og:updated_time" content="2019-05-27T03:04:28.227Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Go Channel的实现">
 <meta name="twitter:description" content="channel作为goroutine间通信和同步的重要途径，是Go runtime层实现CSP并发模型重要的成员。在不理解底层实现时，经常在使用中对channe相关语法的表现感到疑惑，尤其是select case的行为。因此在了解channel的应用前先看一眼channel的实现。 Channel内存布局channel是go的内置类型，它可以被存储到变量中，可以作为函数的参数或返回值，它在runt">
-<meta name="twitter:image" content="http://yoursite.com/2017/11/07/go-channel/Go-Channel的实现/channel.png">
+<meta name="twitter:image" content="http://yoursite.com/2017/11/07/go-channel/channel.png">
 
 
 
@@ -407,7 +407,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:32:15" itemprop="dateModified" datetime="2019-05-26T18:32:15+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:04:28" itemprop="dateModified" datetime="2019-05-27T11:04:28+08:00">2019-05-27</time>
               
             
           </span>
@@ -464,7 +464,7 @@
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> hchan <span class="keyword">struct</span> &#123;</span><br><span class="line">    qcount   <span class="keyword">uint</span>           <span class="comment">// total data in the queue</span></span><br><span class="line">    dataqsiz <span class="keyword">uint</span>           <span class="comment">// size of the circular queue</span></span><br><span class="line">    buf      unsafe.Pointer <span class="comment">// points to an array of dataqsiz elements</span></span><br><span class="line">    elemsize <span class="keyword">uint16</span></span><br><span class="line">    closed   <span class="keyword">uint32</span></span><br><span class="line">    elemtype *_type <span class="comment">// element type</span></span><br><span class="line">    sendx    <span class="keyword">uint</span>   <span class="comment">// send index</span></span><br><span class="line">    recvx    <span class="keyword">uint</span>   <span class="comment">// receive index</span></span><br><span class="line">    recvq    waitq  <span class="comment">// list of recv waiters</span></span><br><span class="line">    sendq    waitq  <span class="comment">// list of send waiters</span></span><br><span class="line">    lock     mutex</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> sudog <span class="keyword">struct</span> &#123;</span><br><span class="line">    g           *g</span><br><span class="line">    selectdone  *<span class="keyword">uint32</span></span><br><span class="line">    next        *sudog</span><br><span class="line">    prev        *sudog</span><br><span class="line">    elem        unsafe.Pointer <span class="comment">// data element</span></span><br><span class="line">    releasetime <span class="keyword">int64</span></span><br><span class="line">    nrelease    <span class="keyword">int32</span>  <span class="comment">// -1 for acquire</span></span><br><span class="line">    waitlink    *sudog <span class="comment">// g.waiting list</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <p>hchan只是channel的头部，头部后面的一段内存连续的数组将作为channel的缓冲区，即<strong>用于存放channel数据的环形队列</strong>。qcount datasize分别描述了缓冲区当前使用量和容量。若channel是无缓冲的，则size是0，就没有这个环形队列了。</p>
-<img src="/2017/11/07/go-channel/Go-Channel的实现/channel.png" style="zoom:40%">
+<img src="/2017/11/07/go-channel/channel.png" style="zoom:40%">
 
 <p>创建chan需要知道数据类型和缓冲区大小。对应上面的结构图<code>newarray</code>将生成这个环形队列。之所以要分开指针类型缓冲区主要是为了区分gc操作，需要将它设置为<strong>flagNoScan</strong>。并且指针大小固定，可以跟hchan头部一起分配内存，不需要先<code>new(hchan)</code>再<code>newarry</code>。</p>
 <blockquote>

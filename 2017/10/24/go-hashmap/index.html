@@ -104,12 +104,12 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="想了解Go内置类型的内存布局的契机，是一次在调试“不同类型的小对象频繁创建对gc性能的影响”时发现map的gc性能不佳，而作为对比的包含slice的struct却很好。这里总结Go runtime里map的实现，可以解释这个问题。 hash table内部结构Go的map就是hashmap，源码在src/runtime/hashmap.go。对比C++用红黑树实现的map，Go的map是unord">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/10/24/go-hashmap/Go-Hashmap内存布局和实现/hashmap.png">
-<meta property="og:updated_time" content="2019-05-26T10:32:16.650Z">
+<meta property="og:image" content="http://yoursite.com/2017/10/24/go-hashmap/hashmap.png">
+<meta property="og:updated_time" content="2019-05-27T03:03:11.466Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Go Hashmap内存布局和实现">
 <meta name="twitter:description" content="想了解Go内置类型的内存布局的契机，是一次在调试“不同类型的小对象频繁创建对gc性能的影响”时发现map的gc性能不佳，而作为对比的包含slice的struct却很好。这里总结Go runtime里map的实现，可以解释这个问题。 hash table内部结构Go的map就是hashmap，源码在src/runtime/hashmap.go。对比C++用红黑树实现的map，Go的map是unord">
-<meta name="twitter:image" content="http://yoursite.com/2017/10/24/go-hashmap/Go-Hashmap内存布局和实现/hashmap.png">
+<meta name="twitter:image" content="http://yoursite.com/2017/10/24/go-hashmap/hashmap.png">
 
 
 
@@ -407,7 +407,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:32:16" itemprop="dateModified" datetime="2019-05-26T18:32:16+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:03:11" itemprop="dateModified" datetime="2019-05-27T11:03:11+08:00">2019-05-27</time>
               
             
           </span>
@@ -466,7 +466,7 @@
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// A bucket for a Go map.</span></span><br><span class="line"><span class="keyword">type</span> bmap <span class="keyword">struct</span> &#123;</span><br><span class="line">	tophash [bucketCnt]<span class="keyword">uint8</span></span><br><span class="line">	<span class="comment">// Followed by bucketCnt keys and then bucketCnt values.</span></span><br><span class="line">	<span class="comment">// <span class="doctag">NOTE:</span> packing all the keys together and then all the values together makes the</span></span><br><span class="line">	<span class="comment">// code a bit more complicated than alternating key/value/key/value/... but it allows</span></span><br><span class="line">	<span class="comment">// us to eliminate padding which would be needed for, e.g., map[int64]int8.</span></span><br><span class="line">	<span class="comment">// Followed by an overflow pointer.</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <p>上图是一个bucket的数据结构，tophash是个大小为8(bucketCnt)的数组，存储了8个key的hash值的高八位值，在对key/value对增删查的时候，先比较key的hash值高八位是否相等，然后再比较具体的key值。根据官方注释在tophash数组之后跟着8个key/value对，每一对都对应tophash当中的一条记录。最后bucket中还包含指向链表下一个bucket的指针。内存布局如下图。</p>
-<img src="/2017/10/24/go-hashmap/Go-Hashmap内存布局和实现/hashmap.png" style="zoom:40%">
+<img src="/2017/10/24/go-hashmap/hashmap.png" style="zoom:40%">
 
 <blockquote>
 <p>之所以把所有k1k2放一起而不是k1v1是因为key和value的数据类型内存大小可能差距很大，比如map[int64]int8，考虑到字节对齐，kv存在一起会浪费很多空间。</p>

@@ -104,13 +104,13 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="去年在读UNP等几本书时都涉及到IO及相关知识，不过由于点很零散，当时没有总结。趁这次看golang net包的机会，结合之前看的比较基础的概念写了这篇博客，记录下现在的理解，方便以后回顾。 IO多路复用Unix网络编程里总结了5种IO模型，其中只有异步IO模型是异步IO，因为只有异步IO的recvfrom是不阻塞进程的。首先每个IO读操作都包括以下两个过程，书里说的异步就是指发起读操作时，数据从">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2018/02/18/go-net/IO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E4%B8%8EGo%E7%BD%91%E7%BB%9C%E5%BA%93%E7%9A%84%E5%AE%9E%E7%8E%B0/io.png">
-<meta property="og:image" content="http://yoursite.com/2018/02/18/go-net/IO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E4%B8%8EGo%E7%BD%91%E7%BB%9C%E5%BA%93%E7%9A%84%E5%AE%9E%E7%8E%B0/c-net.jpg">
-<meta property="og:updated_time" content="2019-05-26T10:49:55.817Z">
+<meta property="og:image" content="http://yoursite.com/2018/02/18/go-net/io.png">
+<meta property="og:image" content="http://yoursite.com/2018/02/18/go-net/c-net.jpg">
+<meta property="og:updated_time" content="2019-05-27T03:01:19.349Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="IO多路复用与Go网络库的实现">
 <meta name="twitter:description" content="去年在读UNP等几本书时都涉及到IO及相关知识，不过由于点很零散，当时没有总结。趁这次看golang net包的机会，结合之前看的比较基础的概念写了这篇博客，记录下现在的理解，方便以后回顾。 IO多路复用Unix网络编程里总结了5种IO模型，其中只有异步IO模型是异步IO，因为只有异步IO的recvfrom是不阻塞进程的。首先每个IO读操作都包括以下两个过程，书里说的异步就是指发起读操作时，数据从">
-<meta name="twitter:image" content="http://yoursite.com/2018/02/18/go-net/IO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E4%B8%8EGo%E7%BD%91%E7%BB%9C%E5%BA%93%E7%9A%84%E5%AE%9E%E7%8E%B0/io.png">
+<meta name="twitter:image" content="http://yoursite.com/2018/02/18/go-net/io.png">
 
 
 
@@ -408,7 +408,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:49:55" itemprop="dateModified" datetime="2019-05-26T18:49:55+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:01:19" itemprop="dateModified" datetime="2019-05-27T11:01:19+08:00">2019-05-27</time>
               
             
           </span>
@@ -469,7 +469,7 @@
 <blockquote>
 <p>另外阻塞IO模型和阻塞IO调用是不同的。比如非阻塞IO模型当中其实包含了多次非阻塞IO调用和一次阻塞IO调用，非阻塞IO调用是指在内核无数据准备好时，recvfrom不阻塞进程直接返回，在内核有数据时发起的recvfrom其实还是阻塞的。</p>
 </blockquote>
-<p><img src="/2018/02/18/go-net/IO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E4%B8%8EGo%E7%BD%91%E7%BB%9C%E5%BA%93%E7%9A%84%E5%AE%9E%E7%8E%B0/io.png" alt="io"></p>
+<p><img src="/2018/02/18/go-net/io.png" alt="io"></p>
 <p><strong>IO复用是指：</strong>进程阻塞于select，等待多个IO中的任一个变为可读，select调用返回，通知相应IO可以读。 它可以支持单线程响应多个请求这种模式。</p>
 <blockquote>
 <p>它本质上是同步I/O，因为他们都需要在读写事件就绪后自己负责进行读写，也就是说这个读写过程是阻塞的，而异步I/O则无需自己负责进行读写，只需要把buffer提交给内核，内核会负责把数据从内核拷贝到用户空间，然后告诉你已可读。</p>
@@ -514,7 +514,7 @@
 <li>read后数据进行解码并放入队列中，等待工作线程处理。</li>
 </ul>
 <p>accept连接以及conn上读写若是在主线程完成，则要求是非阻塞IO，因为IO操作不能阻塞epoll_wait循环。<strong>实际上event loop可能也可以是多线程的，只是单个线程里只有一个epoll_wait</strong>。</p>
-<p><img src="/2018/02/18/go-net/IO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E4%B8%8EGo%E7%BD%91%E7%BB%9C%E5%BA%93%E7%9A%84%E5%AE%9E%E7%8E%B0/c-net.jpg" alt="io"></p>
+<p><img src="/2018/02/18/go-net/c-net.jpg" alt="io"></p>
 <h3 id="goroutine"><a href="#goroutine" class="headerlink" title="goroutine"></a>goroutine</h3><p>Go因为有goroutine，所以可以采用多协程来解决并发问题。accept连接后，将连接丢给goroutine处理后续的读写操作。在开发者看到的这个goroutine中业务逻辑是同步的，也不用考虑IO是否阻塞。</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    ln, err := net.Listen(<span class="string">"tcp"</span>, <span class="string">":8080"</span>)</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        conn, _ := ln.Accept()</span><br><span class="line">        <span class="keyword">go</span> echoFunc(conn)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
@@ -608,8 +608,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2018/01/21/kube-proxy/" rel="next" title="容器网络和Kube-Proxy笔记整理">
-                <i class="fa fa-chevron-left"></i> 容器网络和Kube-Proxy笔记整理
+              <a href="/2018/01/21/kube-proxy/" rel="next" title="容器网络和kube-proxy笔记整理">
+                <i class="fa fa-chevron-left"></i> 容器网络和kube-proxy笔记整理
               </a>
             
           </div>
@@ -618,8 +618,8 @@
 
           <div class="post-nav-prev post-nav-item">
             
-              <a href="/2018/02/19/go-http/" rel="prev" title="HTTP协议与Go的实现">
-                HTTP协议与Go的实现 <i class="fa fa-chevron-right"></i>
+              <a href="/2018/02/19/go-http/" rel="prev" title="HTTP协议与go的实现">
+                HTTP协议与go的实现 <i class="fa fa-chevron-right"></i>
               </a>
             
           </div>

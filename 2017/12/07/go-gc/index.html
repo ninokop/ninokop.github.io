@@ -104,14 +104,14 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="通常C++通过指针引用计数来回收对象，但是这不能处理循环引用。为了避免引用计数的缺陷，后来出现了标记清除，分代等垃圾回收算法。Go的垃圾回收官方形容为 非分代 非紧缩 写屏障 并发标记清理。标记清理算法的字面解释，就是将可达的内存块进行标记mark，最后没有标记的不可达内存块将进行清理sweep。 三色标记法判断一个对象是不是垃圾需不需要标记，就看是否能从当前栈或全局数据区 直接或间接的引用到这个">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/12/07/go-gc/Go-垃圾回收/Animation_of_tri-color_garbage_collection.gif">
-<meta property="og:image" content="http://yoursite.com/2017/12/07/go-gc/Go-垃圾回收/abc.png">
-<meta property="og:image" content="http://yoursite.com/2017/12/07/go-gc/Go-垃圾回收/gc.png">
-<meta property="og:updated_time" content="2019-05-26T10:42:08.332Z">
+<meta property="og:image" content="http://yoursite.com/2017/12/07/go-gc/Animation_of_tri-color_garbage_collection.gif">
+<meta property="og:image" content="http://yoursite.com/2017/12/07/go-gc/abc.png">
+<meta property="og:image" content="http://yoursite.com/2017/12/07/go-gc/gc.png">
+<meta property="og:updated_time" content="2019-05-27T03:03:49.574Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Go 垃圾回收">
 <meta name="twitter:description" content="通常C++通过指针引用计数来回收对象，但是这不能处理循环引用。为了避免引用计数的缺陷，后来出现了标记清除，分代等垃圾回收算法。Go的垃圾回收官方形容为 非分代 非紧缩 写屏障 并发标记清理。标记清理算法的字面解释，就是将可达的内存块进行标记mark，最后没有标记的不可达内存块将进行清理sweep。 三色标记法判断一个对象是不是垃圾需不需要标记，就看是否能从当前栈或全局数据区 直接或间接的引用到这个">
-<meta name="twitter:image" content="http://yoursite.com/2017/12/07/go-gc/Go-垃圾回收/Animation_of_tri-color_garbage_collection.gif">
+<meta name="twitter:image" content="http://yoursite.com/2017/12/07/go-gc/Animation_of_tri-color_garbage_collection.gif">
 
 
 
@@ -409,7 +409,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:42:08" itemprop="dateModified" datetime="2019-05-26T18:42:08+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:03:49" itemprop="dateModified" datetime="2019-05-27T11:03:49+08:00">2019-05-27</time>
               
             
           </span>
@@ -478,11 +478,11 @@
 <li>写屏障监控对象内存修改，重新标色或是放入队列</li>
 </ul>
 <p>完成标记后 对象不是白色就是黑色，清理操作只需要把白色对象回收内存回收就好。</p>
-<img src="/2017/12/07/go-gc/Go-垃圾回收/Animation_of_tri-color_garbage_collection.gif" style="zoom:80%">
+<img src="/2017/12/07/go-gc/Animation_of_tri-color_garbage_collection.gif" style="zoom:80%">
 
 <p><strong>大概理解所谓并发标记，首先是指能够跟用户代码并发的进行，其次是指标记工作不是递归地进行，而是多个goroutine并发的进行</strong>。前者通过write-barrier解决并发问题，后者通过gc-work队列实现非递归地mark可达对象。</p>
 <h4 id="write-barrier"><a href="#write-barrier" class="headerlink" title="write-barrier"></a>write-barrier</h4><p>用下面这个例子解释并发带来的问题，原文引用自<a href="https://github.com/pzxwhc/MineKnowContainer/issues/89" target="_blank" rel="noopener">CMS垃圾回收器原理</a>。当从A这个GC root找到引用对象B时，B变灰A变黑。这时用户goroutine执行把A到B的引用改成了A到C的引用，同时B不再引用C。然后GC goroutine又执行，发现B没有引用对象，B变黑。而这时由于A已经变黑完成了扫描，C将当做白色不可达对象被清除。</p>
-<img src="/2017/12/07/go-gc/Go-垃圾回收/abc.png" style="zoom:80%">
+<img src="/2017/12/07/go-gc/abc.png" style="zoom:80%">
 
 <blockquote>
 <p>解决办法：<strong>引入写屏障</strong>。当发现A已经标记为黑色了，若A又引用C，那么把C变灰入队。这个write_barrier是编译器在每一处内存写操作前生成一小段代码来做的。</p>
@@ -529,7 +529,7 @@
 <li><strong>为什么markTermination需要rescan全局指针和栈</strong>。因为mark阶段是跟用户代码并发的，所以有可能栈上都分了新的对象，这些对象通过write barrier记录下来，在rescan的时候再检查一遍。</li>
 <li><strong>为什么还需要两个stopTheWorld</strong> 在GCtermination时需要STW不然永远都可能栈上出现新对象。在GC开始之前做准备工作（比如 enable write barrier）的时候也要STW。</li>
 </ol>
-<img src="/2017/12/07/go-gc/Go-垃圾回收/gc.png" style="zoom:50%">
+<img src="/2017/12/07/go-gc/gc.png" style="zoom:50%">
 
 <blockquote>
 <ul>

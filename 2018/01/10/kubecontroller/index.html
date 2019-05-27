@@ -104,12 +104,12 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="前两年根据Kube-Infomer的框架，写过route-controller实现gorouter和kubenretes集群中应用路由的转发，还写过一个stack-controller实现AOS的堆栈管理，当时对照1.5和1.7版本的代码做了些总结。1.9之后informer已经完全迁移到client-go了，根据1.9的代码整理一遍框架的源码实现。informer作为异步事件处理框架，完成了事件">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2018/01/10/kubecontroller/KubeController%E5%BC%82%E6%AD%A5%E4%BA%8B%E4%BB%B6%E5%A4%84%E7%90%86Infomer%E7%9A%84%E5%AE%9E%E7%8E%B0/informer.jpg">
-<meta property="og:updated_time" content="2019-05-26T10:50:26.240Z">
+<meta property="og:image" content="http://yoursite.com/2018/01/10/kubecontroller/informer.jpg">
+<meta property="og:updated_time" content="2019-05-27T02:47:31.167Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="KubeController异步事件处理Infomer的实现">
 <meta name="twitter:description" content="前两年根据Kube-Infomer的框架，写过route-controller实现gorouter和kubenretes集群中应用路由的转发，还写过一个stack-controller实现AOS的堆栈管理，当时对照1.5和1.7版本的代码做了些总结。1.9之后informer已经完全迁移到client-go了，根据1.9的代码整理一遍框架的源码实现。informer作为异步事件处理框架，完成了事件">
-<meta name="twitter:image" content="http://yoursite.com/2018/01/10/kubecontroller/KubeController%E5%BC%82%E6%AD%A5%E4%BA%8B%E4%BB%B6%E5%A4%84%E7%90%86Infomer%E7%9A%84%E5%AE%9E%E7%8E%B0/informer.jpg">
+<meta name="twitter:image" content="http://yoursite.com/2018/01/10/kubecontroller/informer.jpg">
 
 
 
@@ -407,7 +407,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:50:26" itemprop="dateModified" datetime="2019-05-26T18:50:26+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 10:47:31" itemprop="dateModified" datetime="2019-05-27T10:47:31+08:00">2019-05-27</time>
               
             
           </span>
@@ -460,7 +460,7 @@
 
       
         <p>前两年根据Kube-Infomer的框架，写过route-controller实现gorouter和kubenretes集群中应用路由的转发，还写过一个stack-controller实现AOS的堆栈管理，当时对照1.5和1.7版本的代码做了些总结。1.9之后informer已经完全迁移到client-go了，根据1.9的代码整理一遍框架的源码实现。informer作为异步事件处理框架，完成了事件监听和分发处理两个过程。</p>
-<p><img src="/2018/01/10/kubecontroller/KubeController%E5%BC%82%E6%AD%A5%E4%BA%8B%E4%BB%B6%E5%A4%84%E7%90%86Infomer%E7%9A%84%E5%AE%9E%E7%8E%B0/informer.jpg" alt="informer"></p>
+<p><img src="/2018/01/10/kubecontroller/informer.jpg" alt="informer"></p>
 <ol>
 <li>监听通过controller中的Reflector实现，上一节记录过reflector如何将listWatcher得到的事件写到Store里，这里informer使用的Store是DeltaFIFO，它支持实现完全按事件发生顺序的分发处理。</li>
 <li>由Reflector生产的事件最终由processor消费。processor通过Pop队列里的事件，更新informer本地的indexer缓存，同时将事件distribute给所有的listerner。</li>
@@ -584,7 +584,7 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2018/01/09/kubelete/" rel="next" title="Kubelet数据源的合并">
+              <a href="/2018/01/09/kubelet/" rel="next" title="Kubelet数据源的合并">
                 <i class="fa fa-chevron-left"></i> Kubelet数据源的合并
               </a>
             
@@ -594,8 +594,8 @@
 
           <div class="post-nav-prev post-nav-item">
             
-              <a href="/2018/01/21/kube-proxy/" rel="prev" title="容器网络和Kube-Proxy笔记整理">
-                容器网络和Kube-Proxy笔记整理 <i class="fa fa-chevron-right"></i>
+              <a href="/2018/01/21/kube-proxy/" rel="prev" title="容器网络和kube-proxy笔记整理">
+                容器网络和kube-proxy笔记整理 <i class="fa fa-chevron-right"></i>
               </a>
             
           </div>
