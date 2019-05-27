@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="原本写博客只是为了方便自己记忆，后来发现贴代码和写注释并没有帮助自己理清思路。今天看了Hystrix的实现，想试试用更简单的方式能不能说清楚原理和实现要点。  后记：说不贴代码结果还是贴了好多，好像尝试失败了…最终还是觉得代码比文字更容易理解…  Hystrix-goHystrix项目本来是Netflix开源的Java项目，主要功能是隔离熔断，hystrix-go是这个隔离熔断库的go版本。其中隔">
+<meta name="keywords" content="network,Golang">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Hystrix-go实现">
+<meta property="og:url" content="http://yoursite.com/2017/11/24/go-hystrix/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="原本写博客只是为了方便自己记忆，后来发现贴代码和写注释并没有帮助自己理清思路。今天看了Hystrix的实现，想试试用更简单的方式能不能说清楚原理和实现要点。  后记：说不贴代码结果还是贴了好多，好像尝试失败了…最终还是觉得代码比文字更容易理解…  Hystrix-goHystrix项目本来是Netflix开源的Java项目，主要功能是隔离熔断，hystrix-go是这个隔离熔断库的go版本。其中隔">
+<meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2019-05-26T10:49:31.641Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Hystrix-go实现">
+<meta name="twitter:description" content="原本写博客只是为了方便自己记忆，后来发现贴代码和写注释并没有帮助自己理清思路。今天看了Hystrix的实现，想试试用更简单的方式能不能说清楚原理和实现要点。  后记：说不贴代码结果还是贴了好多，好像尝试失败了…最终还是觉得代码比文字更容易理解…  Hystrix-goHystrix项目本来是Netflix开源的Java项目，主要功能是隔离熔断，hystrix-go是这个隔离熔断库的go版本。其中隔">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2017/11/24/go-hystrix/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>Hystrix-go实现 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/11/24/go-hystrix/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Hystrix-go实现
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2017-11-24 15:43:49" itemprop="dateCreated datePublished" datetime="2017-11-24T15:43:49+08:00">2017-11-24</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-26 18:49:31" itemprop="dateModified" datetime="2019-05-26T18:49:31+08:00">2019-05-26</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/micro-service/" itemprop="url" rel="index"><span itemprop="name">micro-service</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>原本写博客只是为了方便自己记忆，后来发现贴代码和写注释并没有帮助自己理清思路。今天看了Hystrix的实现，想试试用更简单的方式能不能说清楚原理和实现要点。</p>
+<blockquote>
+<p>后记：说不贴代码结果还是贴了好多，好像尝试失败了…最终还是觉得代码比文字更容易理解…</p>
+</blockquote>
+<h2 id="Hystrix-go"><a href="#Hystrix-go" class="headerlink" title="Hystrix-go"></a>Hystrix-go</h2><p><a href="https://github.com/Netflix/Hystrix" target="_blank" rel="noopener">Hystrix</a>项目本来是Netflix开源的Java项目，主要功能是隔离熔断，<a href="https://github.com/afex/hystrix-go" target="_blank" rel="noopener">hystrix-go</a>是这个隔离熔断库的go版本。其中隔离是异常检测机制，检测的异常包括请求超时、流量过大。熔断是在隔离的基础上统计错误率，当错误达到某种程度就不再发送后续请求，这也是为了杜绝级联错误。另外可以定义熔断发生时的fallback处理方法。从Hystrix-go的配置项来总结其实现的功能包括：</p>
+<ul>
+<li><strong>isolation:</strong> 隔离检测 支持检测请求超时，支持检测并发请求过大两种情况</li>
+<li><strong>circuitbreak:</strong> 熔断开启的阈值 可设置 10s内请求次数，或10s内的错误率</li>
+<li><strong>fallback:</strong>  可以设置是否开启熔断发生后的fallback处理</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Settings <span class="keyword">struct</span> &#123;</span><br><span class="line">    <span class="comment">// isolation</span></span><br><span class="line">    Timeout               time.Duration</span><br><span class="line">    TimeoutEnabled        <span class="keyword">bool</span></span><br><span class="line">    MaxConcurrentRequests <span class="keyword">int</span></span><br><span class="line">    <span class="comment">// circuit break</span></span><br><span class="line">    CircuitBreakerEnabled  <span class="keyword">bool</span></span><br><span class="line">    RequestVolumeThreshold <span class="keyword">uint64</span></span><br><span class="line">    SleepWindow            time.Duration</span><br><span class="line">    ErrorPercentThreshold  <span class="keyword">int</span></span><br><span class="line">    <span class="comment">// fallback</span></span><br><span class="line">    ForceFallback <span class="keyword">bool</span></span><br><span class="line">    ForceOpen     <span class="keyword">bool</span></span><br><span class="line">    ForceClose    <span class="keyword">bool</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>以下两节主要解释以下两个问题</p>
+<blockquote>
+<ol>
+<li>如何检测请求超时，如何控制并发请求数</li>
+<li>如何统计错误请求数和总请求数</li>
+</ol>
+</blockquote>
+<h3 id="asynchronous"><a href="#asynchronous" class="headerlink" title="asynchronous"></a>asynchronous</h3><p>hystrix对外提供Go和Do方法，分别是异步和同步方法。Go开启goroutine执行请求，首先判断是否熔断，再判断是否超过最大请求数，最后开启另一goroutine来统计时间。</p>
+<ul>
+<li><strong>如何与调用方同步</strong> 返回err chan用于调用方同步，<code>errChan</code>只有<code>errorWithFallback</code> 会写入错误</li>
+<li><strong>如何检测并发请求数</strong> <code>executorPool</code>的tickets是用来控制并发请求数的，简单说就是pool中有max conn reqs这么多个缓冲的chan有ticket，每个请求去读取chan，若请求数达到max则chan读取完毕，下次读取将阻塞。<code>select-case</code>将不发生阻塞，直接从default返回错误</li>
+<li><strong>如何检测超时</strong> <code>finished</code> chan用来同步req goroutine和timer goroutine，后者用于检测请求超时事件</li>
+<li><strong>如何统计请求执行结果判断是否熔断</strong>  每次请求都有events产生，events[0]只有可能是<code>success</code>或<code>timeout</code>，events[1]是fallback的执行结果，最终events会经过<code>circuit.ReportEvent</code> 返回到circuit进行统计，每次请求前先判断circuit是否<code>AllowRequest</code>。</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Go</span><span class="params">(name <span class="keyword">string</span>, run runFunc, fallback fallbackFunc)</span> <span class="title">chan</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    ...</span><br><span class="line">    circuit, _, _ = GetCircuit(name)</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">            cmd.finished &lt;- <span class="literal">true</span></span><br><span class="line">        &#125;()</span><br><span class="line">        <span class="keyword">if</span> !cmd.circuit.AllowRequest() &#123;</span><br><span class="line">            cmd.errorWithFallback(ErrCircuitOpen)</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">        cmd.Lock()</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> cmd.ticket = &lt;-circuit.executorPool.Tickets:</span><br><span class="line">            cmd.Unlock()</span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            cmd.Unlock()</span><br><span class="line">            cmd.errorWithFallback(ErrMaxConcurrency)</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">        runStart := time.Now()</span><br><span class="line">        runErr := run()</span><br><span class="line">        <span class="keyword">if</span> !cmd.isTimedOut() &#123;</span><br><span class="line">            cmd.runDuration = time.Since(runStart)</span><br><span class="line">            <span class="keyword">if</span> runErr != <span class="literal">nil</span> &#123;</span><br><span class="line">                cmd.errorWithFallback(runErr)</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            cmd.reportEvent(<span class="string">"success"</span>)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">            cmd.Lock()</span><br><span class="line">            cmd.circuit.executorPool.Return(cmd.ticket)</span><br><span class="line">            cmd.Unlock()</span><br><span class="line">            err := cmd.circuit.ReportEvent(cmd.events, cmd.start, cmd.runDuration)</span><br><span class="line">        &#125;()</span><br><span class="line">        <span class="keyword">if</span> getSettings(name).TimeoutEnabled &#123;</span><br><span class="line">            timer := time.NewTimer(getSettings(name).Timeout)</span><br><span class="line">            <span class="keyword">defer</span> timer.Stop()</span><br><span class="line">            <span class="keyword">select</span> &#123;</span><br><span class="line">            <span class="keyword">case</span> &lt;-cmd.finished:</span><br><span class="line">            <span class="keyword">case</span> &lt;-timer.C:</span><br><span class="line">                cmd.errorWithFallback(ErrTimeout)</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            &lt;-cmd.finished</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="keyword">return</span> cmd.errChan</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="synchronous"><a href="#synchronous" class="headerlink" title="synchronous"></a>synchronous</h3><p>Do方法提供了一种同步调用Go的方式，当然用户可以自己根据err chan做同步。done表示用户的请求正确执行完成，或者表示fallback执行结束。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Do</span><span class="params">(name <span class="keyword">string</span>, run runFunc, fallback fallbackFunc)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    done := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;, <span class="number">1</span>)</span><br><span class="line">    r := <span class="function"><span class="keyword">func</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        err := run()</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> err</span><br><span class="line">        &#125;</span><br><span class="line">        done &lt;- <span class="keyword">struct</span>&#123;&#125;&#123;&#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    f := <span class="function"><span class="keyword">func</span><span class="params">(e error)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        err := fallback(e)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> err</span><br><span class="line">        &#125;</span><br><span class="line">        done &lt;- <span class="keyword">struct</span>&#123;&#125;&#123;&#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">var</span> errChan <span class="keyword">chan</span> error</span><br><span class="line">    errChan = Go(name, r, f)</span><br><span class="line">    <span class="keyword">select</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> &lt;-done:</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    <span class="keyword">case</span> err := &lt;-errChan:</span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="circuit-breaker"><a href="#circuit-breaker" class="headerlink" title="circuit-breaker"></a>circuit-breaker</h2><p>上一节讲了circuit 是统计请求执行结果判断是否熔断的主要数据结构，同时用于检测并发请求数的pool也在其中。<strong>circuit的实现总结来说</strong>，就是要实现metrics来统计请求数，错误及时延等metric信息，并根据这些信息判断是否熔断。</p>
+<blockquote>
+<p>进程中可能要请求不同的后端，hystrix要对不同的请求做统计和熔断控制，所以hystrix内部维护了circuitbreakerMap，其中key就是调用Go方法的name参数。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> CircuitBreaker <span class="keyword">struct</span> &#123;</span><br><span class="line">    Name                   <span class="keyword">string</span></span><br><span class="line">    open                   <span class="keyword">bool</span></span><br><span class="line">    enabled                <span class="keyword">bool</span></span><br><span class="line">    forceOpen              <span class="keyword">bool</span></span><br><span class="line">    forceClosed            <span class="keyword">bool</span></span><br><span class="line">    mutex                  *sync.RWMutex</span><br><span class="line">    openedOrLastTestedTime <span class="keyword">int64</span></span><br><span class="line"></span><br><span class="line">    executorPool *executorPool</span><br><span class="line">    metrics      *metricExchange</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="executorPool"><a href="#executorPool" class="headerlink" title="executorPool"></a>executorPool</h3><p>executorPool通过Tickets控制最大并发数。创建缓冲为max concurrent reqs的chan，并发空结构给它，只有从tickts中读到ticket才能发送请求。一旦tickets被读取完，新一次的读取将阻塞。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> executorPool <span class="keyword">struct</span> &#123;</span><br><span class="line">    Name    <span class="keyword">string</span></span><br><span class="line">    Metrics *poolMetrics</span><br><span class="line">    Max     <span class="keyword">int</span></span><br><span class="line">    Tickets <span class="keyword">chan</span> *<span class="keyword">struct</span>&#123;&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newExecutorPool</span><span class="params">(name <span class="keyword">string</span>)</span> *<span class="title">executorPool</span></span> &#123;</span><br><span class="line">    p := &amp;executorPool&#123;&#125;</span><br><span class="line">    p.Name = name</span><br><span class="line">    p.Metrics = newPoolMetrics(name)</span><br><span class="line">    p.Max = getSettings(name).MaxConcurrentRequests</span><br><span class="line">    p.Tickets = <span class="built_in">make</span>(<span class="keyword">chan</span> *<span class="keyword">struct</span>&#123;&#125;, p.Max)</span><br><span class="line">    <span class="keyword">for</span> i := <span class="number">0</span>; i &lt; p.Max; i++ &#123;</span><br><span class="line">        p.Tickets &lt;- &amp;<span class="keyword">struct</span>&#123;&#125;&#123;&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> p</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Return是提供给请求调用方在执行完请求后回收ticket的方法。这里的executorPool维护的<code>poolMetrics</code>主要统计已执行的请求数和最大还支持的并发数这两个metrics。他们通过<code>metrics.Updates</code>在每次请求结束时传递结果。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *executorPool)</span> <span class="title">Return</span><span class="params">(ticket *<span class="keyword">struct</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    p.Metrics.Updates &lt;- poolMetricsUpdate&#123;</span><br><span class="line">        activeCount: p.ActiveCount(),</span><br><span class="line">    &#125;</span><br><span class="line">    p.Tickets &lt;- ticket</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *executorPool)</span> <span class="title">ActiveCount</span><span class="params">()</span> <span class="title">int</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> p.Max - <span class="built_in">len</span>(p.Tickets)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="metricsExchange"><a href="#metricsExchange" class="headerlink" title="metricsExchange"></a>metricsExchange</h3><p>hystrix包支持两种熔断标记：10s内请求次数，或10s内的错误率。下面<code>IsOpen</code>中判断错误率的函数，其中reqs也是统计10内总请求数的方法。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> metricExchange <span class="keyword">struct</span> &#123;</span><br><span class="line">    Name    <span class="keyword">string</span></span><br><span class="line">    Updates <span class="keyword">chan</span> *commandExecution</span><br><span class="line">    Mutex   *sync.RWMutex</span><br><span class="line"></span><br><span class="line">    metricCollectors []metricCollector.MetricCollector</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><strong>如何判断熔断是否开启</strong> 通过metricCollectors收集请求数和错误数等信息，判断时从中读取</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(circuit *CircuitBreaker)</span> <span class="title">AllowRequest</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> !circuit.IsOpen() || circuit.allowSingleTest()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *metricExchange)</span> <span class="title">ErrorPercent</span><span class="params">(now time.Time)</span> <span class="title">int</span></span> &#123;</span><br><span class="line">    m.Mutex.RLock()</span><br><span class="line">    <span class="keyword">defer</span> m.Mutex.RUnlock()</span><br><span class="line">    <span class="keyword">var</span> errPct <span class="keyword">float64</span></span><br><span class="line">    reqs := m.DefaultCollector().NumRequests().Sum(now)</span><br><span class="line">    errs := m.DefaultCollector().Errors().Sum(now)</span><br><span class="line">    <span class="keyword">if</span> reqs &gt; <span class="number">0</span> &#123;</span><br><span class="line">        errPct = (<span class="keyword">float64</span>(errs) / <span class="keyword">float64</span>(reqs)) * <span class="number">100</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">int</span>(errPct + <span class="number">0.5</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><strong>如何退出熔断</strong> 进入熔断后，需要allowSingleTest来开启试探，若请求成功则可退出熔断。即当熔断开启时间或上一次singleTest时间与当前时间差大于sleepwindow，则可以开启一次试探。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(circuit *CircuitBreaker)</span> <span class="title">allowSingleTest</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">    circuit.mutex.RLock()</span><br><span class="line">    <span class="keyword">defer</span> circuit.mutex.RUnlock()</span><br><span class="line">  </span><br><span class="line">    now := time.Now().UnixNano()</span><br><span class="line">    <span class="keyword">if</span> circuit.open &amp;&amp; </span><br><span class="line">       now &gt; openedOrLastTestedTime+SleepWindow.Nanoseconds() &#123;</span><br><span class="line">         <span class="keyword">return</span> swapped(openedOrLastTestedTime, now)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><strong>如何更新metrics</strong> 通过Updates chan传递每次请求的events结果</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(circuit *CircuitBreaker)</span> <span class="title">ReportEvent</span><span class="params">(eventTypes []<span class="keyword">string</span>, </span></span></span><br><span class="line"><span class="function"><span class="params">    start time.Time, runDuration time.Duration)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> eventTypes[<span class="number">0</span>] == <span class="string">"success"</span> &amp;&amp; circuit.open &#123;</span><br><span class="line">        circuit.setClose()</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">select</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> circuit.metrics.Updates &lt;- &amp;commandExecution&#123;</span><br><span class="line">        Types:       eventTypes,</span><br><span class="line">        Start:       start,</span><br><span class="line">        RunDuration: runDuration,</span><br><span class="line">    &#125;:</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">        <span class="keyword">return</span> CircuitError&#123;...&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>metrics开启goroutine接受updates的消息，在<code>IncrementMetrics</code>中根据event 更新总请求数，各种失败原因导致的错误次数，以及latency。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *metricExchange)</span> <span class="title">Monitor</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> update := <span class="keyword">range</span> m.Updates &#123;</span><br><span class="line">        m.Mutex.RLock()</span><br><span class="line">        totalDuration := time.Since(update.Start)</span><br><span class="line">        wg := &amp;sync.WaitGroup&#123;&#125;</span><br><span class="line">        <span class="keyword">for</span> _, collector := <span class="keyword">range</span> m.metricCollectors &#123;</span><br><span class="line">            wg.Add(<span class="number">1</span>)</span><br><span class="line">            <span class="keyword">go</span> m.IncrementMetrics(wg, collector, update, totalDuration)</span><br><span class="line">        &#125;</span><br><span class="line">        wg.Wait()</span><br><span class="line">        m.Mutex.RUnlock()</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="collector-amp-rolling"><a href="#collector-amp-rolling" class="headerlink" title="collector &amp; rolling"></a>collector &amp; rolling</h3><p>所有错误数等统计，其metrics中的数据结构为rolling.Number。看了rolling包感觉像个时间序列数据库，Buckets的Key是Unix时间戳，整个Number只保存10s内的数据。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Number <span class="keyword">struct</span> &#123;</span><br><span class="line">    Buckets <span class="keyword">map</span>[<span class="keyword">int64</span>]*numberBucket</span><br><span class="line">    Mutex   *sync.RWMutex</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> numberBucket <span class="keyword">struct</span> &#123;</span><br><span class="line">    Value <span class="keyword">float64</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>每次请求结束后调用的Increment方法最终会在这个时间序列数据map中添加当前时间对应的bucket值，同时删掉10s之前的。sum统计的是10s的总数目，sum+=的原因是Increment是以增量进入map的，即每个时间戳对应的是增量。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *Number)</span> <span class="title">Increment</span><span class="params">(i <span class="keyword">float64</span>)</span></span> &#123;</span><br><span class="line">    r.Mutex.Lock()</span><br><span class="line">    <span class="keyword">defer</span> r.Mutex.Unlock()</span><br><span class="line">    b := r.getCurrentBucket()</span><br><span class="line">    b.Value += i</span><br><span class="line">    r.removeOldBuckets()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *Number)</span> <span class="title">Sum</span><span class="params">(now time.Time)</span> <span class="title">float64</span></span> &#123;</span><br><span class="line">    sum := <span class="keyword">float64</span>(<span class="number">0</span>)</span><br><span class="line">    r.Mutex.RLock()</span><br><span class="line">    <span class="keyword">defer</span> r.Mutex.RUnlock()</span><br><span class="line">    <span class="keyword">for</span> timestamp, bucket := <span class="keyword">range</span> r.Buckets &#123;</span><br><span class="line">        <span class="keyword">if</span> timestamp &gt;= now.Unix()<span class="number">-10</span> &#123;</span><br><span class="line">            sum += bucket.Value</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> sum</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/network/" rel="tag"># network</a>
+          
+            <a href="/tags/Golang/" rel="tag"># Golang</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/11/21/how-to-sort/" rel="next" title="Sort排序总结">
+                <i class="fa fa-chevron-left"></i> Sort排序总结
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/12/01/go-memory-model/" rel="prev" title="Go 内存管理">
+                Go 内存管理 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/nino.jpg" alt="nino">
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <div class="site-description motion-element" itemprop="description"></div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">26</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">10</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/ninokop" title="GitHub &rarr; https://github.com/ninokop" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://weibo.com/u/1732126300" title="Weibo &rarr; https://weibo.com/u/1732126300" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Hystrix-go"><span class="nav-number">1.</span> <span class="nav-text">Hystrix-go</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#asynchronous"><span class="nav-number">1.1.</span> <span class="nav-text">asynchronous</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#synchronous"><span class="nav-number">1.2.</span> <span class="nav-text">synchronous</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#circuit-breaker"><span class="nav-number">2.</span> <span class="nav-text">circuit-breaker</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#executorPool"><span class="nav-number">2.1.</span> <span class="nav-text">executorPool</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#metricsExchange"><span class="nav-number">2.2.</span> <span class="nav-text">metricsExchange</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#collector-amp-rolling"><span class="nav-number">2.3.</span> <span class="nav-text">collector &amp; rolling</span></a></li></ol></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

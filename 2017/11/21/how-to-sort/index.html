@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="最近在复习算法。翻出小伙伴在14年写的排序算法开始读，发现自己离开C/C++已经太久到打分号都很不习惯，于是乎打算写个go的堆排快排总结，主要根据标准库的sort包写的，另外刷了几道LeetCode的题目。 Sort Interfacesort的参数是个接口，它实现计算长度，比较以及Swap这三个方法。然后Sort方法根据深度来判断当前排序使用heapSort quickSort还是insertS">
+<meta name="keywords" content="data-structure">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Sort排序总结">
+<meta property="og:url" content="http://yoursite.com/2017/11/21/how-to-sort/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="最近在复习算法。翻出小伙伴在14年写的排序算法开始读，发现自己离开C/C++已经太久到打分号都很不习惯，于是乎打算写个go的堆排快排总结，主要根据标准库的sort包写的，另外刷了几道LeetCode的题目。 Sort Interfacesort的参数是个接口，它实现计算长度，比较以及Swap这三个方法。然后Sort方法根据深度来判断当前排序使用heapSort quickSort还是insertS">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/Heapsort-example.gif">
+<meta property="og:image" content="http://yoursite.com/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/sort.png">
+<meta property="og:updated_time" content="2019-05-26T10:51:25.007Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Sort排序总结">
+<meta name="twitter:description" content="最近在复习算法。翻出小伙伴在14年写的排序算法开始读，发现自己离开C/C++已经太久到打分号都很不习惯，于是乎打算写个go的堆排快排总结，主要根据标准库的sort包写的，另外刷了几道LeetCode的题目。 Sort Interfacesort的参数是个接口，它实现计算长度，比较以及Swap这三个方法。然后Sort方法根据深度来判断当前排序使用heapSort quickSort还是insertS">
+<meta name="twitter:image" content="http://yoursite.com/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/Heapsort-example.gif">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2017/11/21/how-to-sort/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>Sort排序总结 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/11/21/how-to-sort/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Sort排序总结
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2017-11-21 16:05:14" itemprop="dateCreated datePublished" datetime="2017-11-21T16:05:14+08:00">2017-11-21</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-26 18:51:25" itemprop="dateModified" datetime="2019-05-26T18:51:25+08:00">2019-05-26</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/data-structure/" itemprop="url" rel="index"><span itemprop="name">data-structure</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>最近在复习算法。翻出小伙伴在14年写的排序算法开始读，发现自己离开C/C++已经太久到打分号都很不习惯，于是乎打算写个go的堆排快排总结，主要根据标准库的sort包写的，另外刷了几道LeetCode的题目。</p>
+<h2 id="Sort-Interface"><a href="#Sort-Interface" class="headerlink" title="Sort Interface"></a>Sort Interface</h2><p>sort的参数是个接口，它实现计算长度，比较以及Swap这三个方法。然后Sort方法<strong>根据深度</strong>来判断当前排序使用heapSort quickSort还是insertSort。实现这个接口是为了扩展sort支持自定义的数据结构的排序，比如在kubernetes中通过pod的createTimeStamp来排序处理Pod事件。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Interface <span class="keyword">interface</span> &#123;</span><br><span class="line">    Len() <span class="keyword">int</span></span><br><span class="line">    Less(i, j <span class="keyword">int</span>) <span class="keyword">bool</span></span><br><span class="line">    Swap(i, j <span class="keyword">int</span>)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Sort</span><span class="params">(data Interface)</span></span> &#123;</span><br><span class="line">    <span class="comment">// Switch to heapsort if depth of 2*ceil(lg(n+1)) is reached.</span></span><br><span class="line">    n := data.Len()</span><br><span class="line">    maxDepth := <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> i := n; i &gt; <span class="number">0</span>; i &gt;&gt;= <span class="number">1</span> &#123;</span><br><span class="line">        maxDepth++</span><br><span class="line">    &#125;</span><br><span class="line">    maxDepth *= <span class="number">2</span></span><br><span class="line">    quickSort(data, <span class="number">0</span>, n, maxDepth)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>sort包给了Int Float String这三种类型的接口实现，go的swap可以平行赋值，编译器先计算右值再进行赋值。不需要显示的通过中间变量来存储，也不需要用异或运算等方法影响可读性。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> IntSlice []<span class="keyword">int</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p IntSlice)</span> <span class="title">Len</span><span class="params">()</span> <span class="title">int</span></span>           &#123; <span class="keyword">return</span> <span class="built_in">len</span>(p) &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p IntSlice)</span> <span class="title">Less</span><span class="params">(i, j <span class="keyword">int</span>)</span> <span class="title">bool</span></span> &#123; <span class="keyword">return</span> p[i] &lt; p[j] &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p IntSlice)</span> <span class="title">Swap</span><span class="params">(i, j <span class="keyword">int</span>)</span></span>      &#123; p[i], p[j] = p[j], p[i] &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//sort.Sort(sort.IntSlice(data))</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="Insert-Sort"><a href="#Insert-Sort" class="headerlink" title="Insert Sort"></a>Insert Sort</h2><p><strong>在排序len大于1小于等于7时，sort包默认使用插入排序。</strong>插入排序的思路是<strong>对于每个未排序数据，在已排序序列中从后向前扫描，找到相应位置并插入</strong>。</p>
+<ul>
+<li>左边是有序区，右边是无序区，每次循环期望找到无序区的第一个data在有序区中的位置下标</li>
+<li>确认位置后，这之后的有序区元素依次右移。</li>
+<li>这个过程中找到位置和数据右移可以合并，例如下面的实现。</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">insertionSort</span><span class="params">(data Interface, a, b <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> i := a + <span class="number">1</span>; i &lt; b; i++ &#123;</span><br><span class="line">        <span class="keyword">for</span> j := i; j &gt; a &amp;&amp; data.Less(j, j<span class="number">-1</span>); j-- &#123;</span><br><span class="line">            data.Swap(j, j<span class="number">-1</span>)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="HeapSort"><a href="#HeapSort" class="headerlink" title="HeapSort"></a>HeapSort</h2><p>堆排序，是利用大顶堆或小顶堆的相关操作完成的。大顶堆就是父节点的键值总是大于或等于任何一个子节点的键值；同时每个节点的左子树和右子树都是一个大顶堆。从小到大排序的基本思路是：</p>
+<ul>
+<li>构建大顶堆，保证root节点是最大的。</li>
+<li>数组末尾是有序区，每次循环保证将大顶堆的root节点置换到有序区。</li>
+<li>循环中对无序区的数据进行堆化，保证root节点是无序区中最大的。</li>
+</ul>
+<h3 id="堆化数据"><a href="#堆化数据" class="headerlink" title="堆化数据"></a>堆化数据</h3><p>堆化数据的一个点在于，以0为根节点的大顶堆，其第<code>i</code>个数据的子节点分别为<code>2i+1</code>和<code>2i+2</code>，这个很好证明，略。堆化数据从堆底开始，跳过所有叶子节点，起始显然是最后一个叶子节点<code>n-1</code>的父节点，位置是<code>n-1-1/2</code>。<code>siftDown</code>完成了从i到hi的数据堆化。</p>
+<blockquote>
+<p>sort包里写的是<code>(hi-1)/2</code>，逻辑上漏掉了<code>hi-1</code>才是叶子节点的位置，但实际上不影响。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">heapSort</span><span class="params">(data Interface, a, b <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    first := a</span><br><span class="line">    lo := <span class="number">0</span></span><br><span class="line">    hi := b - a</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Build heap with greatest element at top.</span></span><br><span class="line">    <span class="keyword">for</span> i := hi/<span class="number">2</span> - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i-- &#123;</span><br><span class="line">        siftDown(data, i, hi, first)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Pop elements, largest first, into end of data.</span></span><br><span class="line">    <span class="keyword">for</span> i := hi - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i-- &#123;</span><br><span class="line">        data.Swap(first, first+i)</span><br><span class="line">        siftDown(data, lo, i, first)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>siftDown数据堆化的思路是，从root节点开始，置换保证root节点是子节点中最大的，只所以这里能return，是因为堆排的时候是从下到上堆化的，所以下端都已经是大顶堆了。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">siftDown</span><span class="params">(data Interface, lo, hi, first <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    root := lo</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        child := <span class="number">2</span>*root + <span class="number">1</span></span><br><span class="line">        <span class="keyword">if</span> child &gt;= hi &#123;</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> child+<span class="number">1</span> &lt; hi &amp;&amp; data.Less(first+child, first+child+<span class="number">1</span>) &#123;</span><br><span class="line">            child++</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> !data.Less(first+root, first+child) &#123;</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">        data.Swap(first+root, first+child)</span><br><span class="line">        root = child</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="堆的删除"><a href="#堆的删除" class="headerlink" title="堆的删除"></a>堆的删除</h3><p>堆都是从data[0]的地方pop数据，在堆排中显然pop出去的当前无序区最大值将置换到data[n-1]，这时有序区终于有一个值了。然后无序区开始siftDown，堆化后继续pop扩大有序区直到完全有序。</p>
+<p>过程示例 下图转自<a href="http://wuchong.me/blog/2014/02/09/algorithm-sort-summary/" target="_blank" rel="noopener">经典排序算法总结</a></p>
+<p><img src="/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/Heapsort-example.gif" alt="heapsort实例"></p>
+<h2 id="QuickSort"><a href="#QuickSort" class="headerlink" title="QuickSort"></a>QuickSort</h2><p>快排和归并都是分治的思路。go的快排通过maxDepth实现了对递归调用深度的限制，不超过<code>lg(b-a)</code>。另外数据len小于等于7时切到了插入排序。</p>
+<blockquote>
+<p>深度的计算</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">quickSort</span><span class="params">(data Interface, a, b, maxDepth <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> b-a &gt; <span class="number">7</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> maxDepth == <span class="number">0</span> &#123;</span><br><span class="line">            heapSort(data, a, b)</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">        maxDepth--</span><br><span class="line">        mlo, mhi := doPivot(data, a, b)</span><br><span class="line">        <span class="comment">// Avoiding recursion on the larger subproblem guarantees</span></span><br><span class="line">        <span class="comment">// a stack depth of at most lg(b-a).</span></span><br><span class="line">        <span class="keyword">if</span> mlo-a &lt; b-mhi &#123;</span><br><span class="line">            quickSort(data, a, mlo, maxDepth)</span><br><span class="line">            a = mhi <span class="comment">// i.e., quickSort(data, mhi, b)</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            quickSort(data, mhi, b, maxDepth)</span><br><span class="line">            b = mlo <span class="comment">// i.e., quickSort(data, a, mlo)</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> b-a &gt; <span class="number">1</span> &#123;</span><br><span class="line">        insertionSort(data, a, b)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>剪掉分支，单纯的快排go的sort包是这样实现的。快排的思路是标记一个基准数，将比这个数大的全放到右边，比他小的都放到左边，这是个不断挖坑填坑的过程。完成后，对左右分区做同样的事，直到各区只有一个数。sort包的快排过程思路类似，但稍有不同。</p>
+<ul>
+<li>在data中从左找比data[0]大的记录为b，从右找比data[0]小的记录为c，找到后swap(b, c)</li>
+<li>同时用变量a和d记录与data[0]相等的位置，并把与data[0]相等的数都swap到两端</li>
+<li>循环过后其实已经分好左边到b都比data[0]小，右边c之后都比data[0]大。这时开始swapRange就是将b位置的x个位置与data[0]起始的x个位置swap。</li>
+<li>最终的结果就是data[0]和与之相等的值都放到了正确位置。</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">quickSort</span><span class="params">(data Interface, a, b <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> a &lt; b<span class="number">-1</span> &#123;</span><br><span class="line">        mlo, mhi := doPivot(data, a, b)</span><br><span class="line">        quickSort(data, a, mlo)</span><br><span class="line">        quickSort(data, mhi, b)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">doPivot</span><span class="params">(data Interface, lo, hi <span class="keyword">int</span>)</span> <span class="params">(midlo, midhi <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    pivot := lo</span><br><span class="line">    a, b, c, d := lo+<span class="number">1</span>, lo+<span class="number">1</span>, hi, hi</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">for</span> b &lt; c &#123;</span><br><span class="line">            <span class="keyword">if</span> data.Less(b, pivot) &#123; <span class="comment">// data[b] &lt; pivot</span></span><br><span class="line">                b++</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> !data.Less(pivot, b) &#123; <span class="comment">// data[b] = pivot</span></span><br><span class="line">                data.Swap(a, b)</span><br><span class="line">                a++</span><br><span class="line">                b++</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">for</span> b &lt; c &#123;</span><br><span class="line">            <span class="keyword">if</span> data.Less(pivot, c<span class="number">-1</span>) &#123; <span class="comment">// data[c-1] &gt; pivot</span></span><br><span class="line">                c--</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> !data.Less(c<span class="number">-1</span>, pivot) &#123; <span class="comment">// data[c-1] = pivot</span></span><br><span class="line">                data.Swap(c<span class="number">-1</span>, d<span class="number">-1</span>)</span><br><span class="line">                c--</span><br><span class="line">                d--</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> b &gt;= c &#123;</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// data[b] &gt; pivot; data[c-1] &lt; pivot</span></span><br><span class="line">        data.Swap(b, c<span class="number">-1</span>)</span><br><span class="line">        b++</span><br><span class="line">        c--</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    n := min(b-a, a-lo)</span><br><span class="line">    swapRange(data, lo, b-n, n)</span><br><span class="line"></span><br><span class="line">    n = min(hi-d, d-c)</span><br><span class="line">    swapRange(data, c, hi-n, n)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> lo + b - a, hi - (d - c)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>重写一遍doPivot，思路清晰一点。当b位置被小于pivot的值覆盖后，c就是坑。之后c被大于pivot的值覆盖，最后坑就是b==c的位置。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">doPivot</span><span class="params">(a []<span class="keyword">int</span>, lo <span class="keyword">int</span>, hi <span class="keyword">int</span>)</span> <span class="title">int</span></span> &#123;</span><br><span class="line">    pivot := a[lo]</span><br><span class="line">    b, c := lo, hi</span><br><span class="line">    <span class="keyword">for</span> b &lt; c &#123;</span><br><span class="line">        <span class="keyword">for</span> b &lt; c &amp;&amp; a[c] &gt;= pivot &#123;</span><br><span class="line">            c--</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> b &lt; c &#123;</span><br><span class="line">            a[b] = a[c]</span><br><span class="line">            b++</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> b &lt; c &amp;&amp; a[b] &lt; pivot &#123;</span><br><span class="line">            b++</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> b &lt; c &#123;</span><br><span class="line">            a[c] = a[b]</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    a[b] = pivot</span><br><span class="line">    <span class="keyword">return</span> b</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">quickSort</span><span class="params">(a []<span class="keyword">int</span>, low <span class="keyword">int</span>, high <span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> low &lt; high &#123;</span><br><span class="line">        <span class="keyword">var</span> pivot = doPivot(a, low, high)</span><br><span class="line">        quickSort(a, low, pivot<span class="number">-1</span>)</span><br><span class="line">        quickSort(a, pivot+<span class="number">1</span>, high)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="MergeSort"><a href="#MergeSort" class="headerlink" title="MergeSort"></a>MergeSort</h2><p>归并排序sort包里没有，原理很简单，跟快排一样是分治。不过是靠合并两个有序数列为基础实现的，需要额外的空间存储合并结果。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">MergeSort</span><span class="params">(data []<span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    sp := <span class="built_in">make</span>([]<span class="keyword">int</span>, <span class="built_in">len</span>(data))</span><br><span class="line">    mergeSort(data, <span class="number">0</span>, <span class="built_in">len</span>(data)<span class="number">-1</span>, sp)</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">mergeSort</span><span class="params">(data []<span class="keyword">int</span>, first, last <span class="keyword">int</span>, sp []<span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> first &lt; last &#123;</span><br><span class="line">        mid := first + (last-first)/<span class="number">2</span></span><br><span class="line">        mergeSort(data, first, mid, sp)</span><br><span class="line">        mergeSort(data, mid+<span class="number">1</span>, last, sp)</span><br><span class="line">        merge(data, first, mid, last, sp)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">merge</span><span class="params">(data []<span class="keyword">int</span>, first, mid, last <span class="keyword">int</span>, sp []<span class="keyword">int</span>)</span></span> &#123;</span><br><span class="line">    i, j, k := first, mid+<span class="number">1</span>, <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> ; i &lt;= mid &amp;&amp; j &lt;= last; k++ &#123;</span><br><span class="line">        <span class="keyword">if</span> data[i] &lt; data[j] &#123;</span><br><span class="line">            sp[k] = data[i]</span><br><span class="line">            i++</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            sp[k] = data[j]</span><br><span class="line">            j++</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> ; i &lt;= mid; i++ &#123;</span><br><span class="line">        sp[k] = data[i]</span><br><span class="line">        k++</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> ; j &lt;= last; j++ &#123;</span><br><span class="line">        sp[k] = data[j]</span><br><span class="line">        k++</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> i = <span class="number">0</span>; i &lt; k; i++ &#123;</span><br><span class="line">        data[first+i] = sp[i]</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Summary"><a href="#Summary" class="headerlink" title="Summary"></a>Summary</h2><p>在数据较少，且可能整体有序的情况，可以考虑insertsort。最坏的情况下堆排和归并排序较好。所谓稳定排序是指里那个相等的元素排序之后二者的相对顺序是否不变。</p>
+<blockquote>
+<p>快排可以实现稳定吗，为什么最坏情况下是O(n^2)，辅助空间怎样计算</p>
+</blockquote>
+<p><img src="/2017/11/21/how-to-sort/Sort%E6%8E%92%E5%BA%8F%E6%80%BB%E7%BB%93/sort.png" alt></p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><p><a href="http://wuchong.me/blog/2014/02/09/algorithm-sort-summary/" target="_blank" rel="noopener">经典排序算法总结</a></p>
+<p><a href="http://blog.csdn.net/morewindows/article/details/6678165" target="_blank" rel="noopener">白话经典算法系列</a></p>
+<p><a href="https://www.jianshu.com/p/8e6a86f25d4b" target="_blank" rel="noopener">排序问题</a></p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/data-structure/" rel="tag"># data-structure</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/11/13/grpc-interceptor/" rel="next" title="gRPC interceptor">
+                <i class="fa fa-chevron-left"></i> gRPC interceptor
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/11/24/go-hystrix/" rel="prev" title="Hystrix-go实现">
+                Hystrix-go实现 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/nino.jpg" alt="nino">
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <div class="site-description motion-element" itemprop="description"></div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">26</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">10</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/ninokop" title="GitHub &rarr; https://github.com/ninokop" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://weibo.com/u/1732126300" title="Weibo &rarr; https://weibo.com/u/1732126300" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Sort-Interface"><span class="nav-number">1.</span> <span class="nav-text">Sort Interface</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Insert-Sort"><span class="nav-number">2.</span> <span class="nav-text">Insert Sort</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#HeapSort"><span class="nav-number">3.</span> <span class="nav-text">HeapSort</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#堆化数据"><span class="nav-number">3.1.</span> <span class="nav-text">堆化数据</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#堆的删除"><span class="nav-number">3.2.</span> <span class="nav-text">堆的删除</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#QuickSort"><span class="nav-number">4.</span> <span class="nav-text">QuickSort</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#MergeSort"><span class="nav-number">5.</span> <span class="nav-text">MergeSort</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Summary"><span class="nav-number">6.</span> <span class="nav-text">Summary</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference"><span class="nav-number">7.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

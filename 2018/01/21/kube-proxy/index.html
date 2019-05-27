@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="前段时间作死把hexo的图片显示搞崩了，长时间不想写东西，也不知道自己在瞎忙什么。为了重新进入学习状态，还是老老实实把以前写过的东西汇总一下吧。  写了一半发现容器网络的内容太多太杂 挖个坑 以后填  Linux Bridge第一次对Linux Namespace有了解是看了这篇博客，按照博客介绍的方法模拟了docker0网桥来隔离两个网络命名空间。docker run一个容器之后，docker会">
+<meta name="keywords" content="network,Kubernetes">
+<meta property="og:type" content="article">
+<meta property="og:title" content="容器网络和Kube-Proxy笔记整理">
+<meta property="og:url" content="http://yoursite.com/2018/01/21/kube-proxy/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="前段时间作死把hexo的图片显示搞崩了，长时间不想写东西，也不知道自己在瞎忙什么。为了重新进入学习状态，还是老老实实把以前写过的东西汇总一下吧。  写了一半发现容器网络的内容太多太杂 挖个坑 以后填  Linux Bridge第一次对Linux Namespace有了解是看了这篇博客，按照博客介绍的方法模拟了docker0网桥来隔离两个网络命名空间。docker run一个容器之后，docker会">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/docker-net.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/ns-route.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/proc-ns.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/netfilter.svg">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/docker-iptables.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/ns-route.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/host-route.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/iptables-save.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/kube-service.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/flannel.png">
+<meta property="og:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/vxlan.png">
+<meta property="og:updated_time" content="2019-05-26T10:52:31.266Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="容器网络和Kube-Proxy笔记整理">
+<meta name="twitter:description" content="前段时间作死把hexo的图片显示搞崩了，长时间不想写东西，也不知道自己在瞎忙什么。为了重新进入学习状态，还是老老实实把以前写过的东西汇总一下吧。  写了一半发现容器网络的内容太多太杂 挖个坑 以后填  Linux Bridge第一次对Linux Namespace有了解是看了这篇博客，按照博客介绍的方法模拟了docker0网桥来隔离两个网络命名空间。docker run一个容器之后，docker会">
+<meta name="twitter:image" content="http://yoursite.com/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/docker-net.png">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2018/01/21/kube-proxy/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>容器网络和Kube-Proxy笔记整理 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/01/21/kube-proxy/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">容器网络和Kube-Proxy笔记整理
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2018-01-21 20:42:23" itemprop="dateCreated datePublished" datetime="2018-01-21T20:42:23+08:00">2018-01-21</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-26 18:52:31" itemprop="dateModified" datetime="2019-05-26T18:52:31+08:00">2019-05-26</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/Kubernetes/" itemprop="url" rel="index"><span itemprop="name">Kubernetes</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>前段时间作死把hexo的图片显示搞崩了，长时间不想写东西，也不知道自己在瞎忙什么。为了重新进入学习状态，还是老老实实把以前写过的东西汇总一下吧。</p>
+<blockquote>
+<p>写了一半发现容器网络的内容太多太杂 挖个坑 以后填</p>
+</blockquote>
+<h3 id="Linux-Bridge"><a href="#Linux-Bridge" class="headerlink" title="Linux Bridge"></a>Linux Bridge</h3><p>第一次对Linux Namespace有了解是看了<a href="https://coolshell.cn/articles/17029.html" target="_blank" rel="noopener">这篇博客</a>，按照博客介绍的方法模拟了docker0网桥来隔离两个网络命名空间。docker run一个容器之后，docker会创建称为docker0的linux bridge，而且还有一个veth5e66437的类似于虚拟网卡的东西。</p>
+<blockquote>
+<p>物理的网桥是一个标准的二层网络设备，一般它只有两个网口，连接两个物理网络，起到基本的隔离冲突域的作用。网桥通过MAC地址学习的方式实现二层上相对高效的通信。目前标准网桥设备大概已经被淘汰了，替代者是二层交换机，可以算是多口网桥。</p>
+</blockquote>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/docker-net.png" alt></p>
+<p>之前一直有个疑问，<strong>为什么docker0转发的时候会经过iptables，为什么不在二层通过MAC学习直接转发了</strong>。后来找到一种比较能理解的说法是：linux bridge可以在二层转发，docker run之后docker daemon打开了以下参数，使bridge的Netfilter可以复用IP层的Netfilter代码，如果关掉这个参数，其实可以通过二层直达的包就不会在iptables日志里看到了。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/proc/sys/net/bridge/bridge-nf-call-iptables</span><br></pre></td></tr></table></figure>
+
+<p>还有一个问题是，bridge本身是个带IP的有三层属性的设备，它本身是有ip包forward能力的，前提是打开了ip_forward参数。不然可能出现docker0拒绝掉发往容器的ip包。</p>
+<h4 id="创建net命名空间模拟docker0"><a href="#创建net命名空间模拟docker0" class="headerlink" title="创建net命名空间模拟docker0"></a>创建net命名空间模拟docker0</h4><p>以下记录创建网桥并且配置网桥的地址和网段。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">brctl addbr lxcbr0</span><br><span class="line">brctl stp lxcbr0 off</span><br><span class="line">ifconfig lxcbr0 <span class="number">172.17</span>.<span class="number">20.1</span>/<span class="number">24</span> up</span><br></pre></td></tr></table></figure>
+
+<p>创建一个net namespace，激活其的loopback设备。创建一对虚拟网卡veth-ns2和veth-ns1，并把veth-ns2这个网卡按进ns2中，将ns2中这个网卡设为eth0，并且配置ip地址和激活。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ip netns add ns2</span><br><span class="line">ip netns exec ns2 ip link set dev lo up </span><br><span class="line">ip link add veth-ns2 type veth peer name veth-ns1</span><br><span class="line">ip link set neth-ns2 netns ns2</span><br><span class="line">ip netns exec ns2 ip link set dev veth-ns2 name eth0</span><br><span class="line">ip netns exec ns2 ip ifconfig eth0 172.17.20.11/24 up</span><br></pre></td></tr></table></figure>
+
+<p>把这一对虚拟网卡的另一个veth-ns1添加到lxcbr0这个网桥当中，并为ns2添加一个路由规则，让ns2可以通过默认路由访问到lxcbr0。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">brctl addif lxcbr0 veth-ns1</span><br><span class="line">ip netns exec ns2 ip route add default via <span class="number">172.17</span>.<span class="number">20.1</span></span><br><span class="line">ip link set veth-ns1 up</span><br></pre></td></tr></table></figure>
+
+<p>添加路由后可以从ns2 ping 主机IP，最终会会通过默认路由发到lxcbr0，即主机上。</p>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/ns-route.png" alt></p>
+<h4 id="在docker0添加网卡"><a href="#在docker0添加网卡" class="headerlink" title="在docker0添加网卡"></a>在docker0添加网卡</h4><p>当主机上跑了多个容器时，会发现vethxxxx这种虚拟网卡对变多，这意味着每docker run一个容器都会创建一个虚拟网卡，其中peerA连接到docker0网卡并启动，peerB则放入另一个隔离的netns，设置它的名字为eth0，配置ip地址并启动。最后在内外添加路由就可以互相通信了。那对以有的容器，如何在容器里动态添加另一块网卡eth1，操作很类似，只是首先要找到这个容器对应的ns是什么。</p>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/proc-ns.png" alt></p>
+<p>正常情况下我们创建一个ns空间会在<code>/var/run/netns</code>下看到对应的描述符，然后通过<code>ip netns exec nsx</code>这种命令去另一个net命名空间执行命令。但docker可能为了不让用户误操作吧，把这个netns隐藏了。可以通过以下方式去找到这个空间并挂到/var/run/netns目录下。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pid=`docker inspect -f <span class="string">'&#123;&#123;.State.Pid&#125;&#125;'</span> <span class="variable">$container_id</span>`</span><br><span class="line">ln -s /proc/<span class="variable">$pid</span>/ns/net /var/run/netns/<span class="variable">$container_id</span></span><br></pre></td></tr></table></figure>
+
+<p>在这个docker0添加一对网卡的方式也跟上面差不多。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">ip link add peerA type veth peer name peerB</span><br><span class="line">brctl addif docker0 peerA</span><br><span class="line">ip link set peerA up</span><br><span class="line">ip link set peerB netns $&#123;container_ip&#125;</span><br><span class="line">ip netns exec $&#123;container_ip&#125; ip link set dev peerB name eth1</span><br><span class="line">ip netns exec $&#123;container_ip&#125; ip link set eth1 up </span><br><span class="line">ip netns exec $&#123;container_ip&#125; ip addr add $&#123;br_ip&#125; dev eth1</span><br></pre></td></tr></table></figure>
+
+<h3 id="iptables"><a href="#iptables" class="headerlink" title="iptables"></a>iptables</h3><p>通常所说iptables是Linux内置的防火墙，由netfilter和iptables两部分组成。netfilter在内核空间，是内核的一部分，它包含N张数据的过滤表，这些数据表描述了内核控制数据过滤的规则。iptables是个用户空间的工具来修改这些过滤表的规则。</p>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/netfilter.svg" alt></p>
+<p>netfilter主要涉及4个表和5个链，四个表的优先级为raw-&gt;manage-&gt;nat-&gt;filter。</p>
+<ul>
+<li>filter表专门用来过滤表，它内建了三个链。如上图所示INPUT链是在路由后针对那些目的地是本地的包的过滤，FORWARD链过滤所有源和目的都不是本地的包，OUTPUT链过滤所有本地产生的包。</li>
+<li>nat表用来做地址转换。在路由前会经过PREROUTING链修改包的目的地址（DNAT），OUTPUT链会改变本地产生的包的目的地址（DNAT），POSTROUTING链则是在包离开前改变其源地址（SNAT）。</li>
+<li>manage表用来修改数据包，可以改变包和包头的内容，比如TTL、TOS、MARK等。</li>
+<li>raw表暂时理解为可以跳过netfilter的一些tracing过程。</li>
+</ul>
+<h4 id="iptables-log"><a href="#iptables-log" class="headerlink" title="iptables log"></a>iptables log</h4><p>ubuntu14.04的iptables日志可以在/var/log/syslog里查看，前提是在iptables规则里设置了日志等级。比如说通过以下命令可以给nat表的prerouting链添加日志级别为4，且带有相关prefix标记的日志。这个日志也可以通过-D命令删除或者换位。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">iptables -t nat -I PREROUTING -j LOG --log-level <span class="number">4</span> --log-prefix <span class="string">"[Prerouting-nat-nino]"</span></span><br><span class="line">iptables -t nat -D PREROUTING <span class="number">2</span></span><br></pre></td></tr></table></figure>
+
+<p>可以通过-t指定表来查看对应规则。</p>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/docker-iptables.png" alt></p>
+<h3 id="docker网络"><a href="#docker网络" class="headerlink" title="docker网络"></a>docker网络</h3><h4 id="四种原生网络模式"><a href="#四种原生网络模式" class="headerlink" title="四种原生网络模式"></a>四种原生网络模式</h4><p>bridge模式表示将一个主机上的docker容器连接到一个虚拟网桥上。none模式表示docker容器拥有自己的netns，但并不为docker容器配置任何网络，也就是它没有网卡、ip和路由信息，需要自己去配置好。host模式是容器不会获得独立的netns，而是和宿主机公用一个netns，容器继续使用宿主机的IP和端口。container模式指新创建的容器和已经存在的一个容器共享一个netns。</p>
+<blockquote>
+<p>这里公用netns的意思是，其他linux 命名空间是隔离的。</p>
+</blockquote>
+<h4 id="容器到容器"><a href="#容器到容器" class="headerlink" title="容器到容器"></a>容器到容器</h4><p>从容器<code>172.17.20.11</code>访问同主机上的另一个容器<code>172.17.20.13</code>，因为他们都挂在同一个docker0上，所以容器会发现目的地址在route的172.17.20.0/24这个网络内，且网络是U直达的，所以直接把包发到容器内eth0上。这个eth0网卡就是通过vethpair挂在docker0上的网卡的一端，于是包直接发到了docker0。主机从docker0网卡收到包，发现mac地址不是本机，于是网桥开始转发可以在<code>FORWARD</code>链上看到记录。</p>
+<blockquote>
+<p>容器中查了下arp缓存，发现有172.17.20.13的mac地址，所以试了下去掉主机route发现仍然是可以通的。</p>
+</blockquote>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/ns-route.png" alt></p>
+<h4 id="容器到主机"><a href="#容器到主机" class="headerlink" title="容器到主机"></a>容器到主机</h4><p>在容器中curl host肯定是走默认路由的，包会带上Gateway的mac地址，即包通过eth0发到docker0。docker0收到包后发现mac地址就是自己，于是包开始往上层协议栈走。这时可以分别在NAT的PREROUTING链、FILTER的INPUT链上看到数据包。</p>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/host-route.png" alt></p>
+<p>当主机上层处理完数据发给容器时会走docker0这个直连网络，通过二层的arp缓存找到容器对应的mac地址，通过linux bridge上与之对应的veth设备发出。</p>
+<p>如果是从容器发往同一个网络中别的主机，在发出之前会做SNAT（MASQUERADE），将源地址换为主机IP发送。看到NAT表的POSTROUTING链刚好有这个SNAT的规则，即把所有源地址是容器的数据全都改成网卡地址。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Chain POSTROUTING (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination         </span><br><span class="line">MASQUERADE  all  --  <span class="number">172.17</span>.<span class="number">0.0</span>/<span class="number">16</span>        anywhere            </span><br><span class="line">MASQUERADE  tcp  --  <span class="number">172.17</span>.<span class="number">0.2</span>           <span class="number">172.17</span>.<span class="number">0.2</span>           tcp dpt:http-alt</span><br></pre></td></tr></table></figure>
+
+<p>数据回到主机之后不是用DNAT回到容器的，而是通过filter表的这条规则处理的，即conntrack模块记录了连接的四种状态，内核负责把包发到原来的连接上，最终回到容器内部。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Chain FORWARD (policy DROP)</span><br><span class="line">target     prot opt source               destination                    </span><br><span class="line">ACCEPT     all  --  anywhere             anywhere             ctstate RELATED,ESTABLISHED</span><br></pre></td></tr></table></figure>
+
+<h4 id="端口映射"><a href="#端口映射" class="headerlink" title="端口映射"></a>端口映射</h4><p>端口映射有两种方式，默认的是docker-proxy+iptables DNAT的方式。当通过docker run -p指定了host port和对应容器端口的映射关系后，会启动对应的docker-proxy进程来处理转发。如果docker启动带上<code>--userland-proxy=false</code>就不会有这个proxy。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">docker-proxy -proto tcp -host-ip <span class="number">0.0</span>.<span class="number">0.0</span> -host-port <span class="number">8080</span> </span><br><span class="line">-container-ip <span class="number">172.17</span>.<span class="number">0.2</span> -container-port <span class="number">8080</span></span><br></pre></td></tr></table></figure>
+
+<p>不论哪种方式，最终NAT的PREROUTING链会处理dst-type为local的请求。把所有目的端口为9090的请求转给容器对应端口，完成端口映射。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Chain PREROUTING (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination         </span><br><span class="line">DOCKER     all  --  anywhere             anywhere             ADDRTYPE match dst-type LOCAL</span><br><span class="line">Chain DOCKER (2 references)</span><br><span class="line">target     prot opt source               destination         </span><br><span class="line">DNAT       tcp  --  anywhere             anywhere             tcp dpt:9090 to:172.17.0.2:8080</span><br></pre></td></tr></table></figure>
+
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/iptables-save.png" alt></p>
+<h3 id="kube-service"><a href="#kube-service" class="headerlink" title="kube-service"></a>kube-service</h3><p>就不写概念了，总结来说service解耦了后端提供服务的pod和用户的访问，它本身是个逻辑概念，用户只要访问service的clusterIP和clusterPort就可以轮询的访问到后端关联到这个service的pod。具体完成这个负载均衡的就是kube-proxy，它是运行在每个node节点上的简单的网络代理和负载均衡器。</p>
+<blockquote>
+<p>service的三种方式：clusterIP nodePort和Loadbalancer</p>
+</blockquote>
+<p>kube-proxy有三种转发流量的方式，包括userspace、iptables、ipvs。userspace这种模式涉及到数据包从内核态到用户态的拷贝，然后做代理和转发。iptables模式下kube-proxy直接修改iptables规则来转发包。ipvs模式是内核基于netfilter实现的L4负载均衡，还没用过，以后再说。</p>
+<h4 id="iptables-1"><a href="#iptables-1" class="headerlink" title="iptables"></a>iptables</h4><p>环境上部署了hello-node这个应用对应后端两个pod，分别对应172.31.0.3:80和172.31.0.18:80。这个Service以NodePort的形式发布，对应的nodePort为30012。</p>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/kube-service.png" alt></p>
+<p>如下所示的两条iptables规则将访问本机nodePort的请求转发给KUBE-SVC-D4CJ3Y6U24W4OUPV链。除了nodePort这种方式外，在集群内部访问时通过ClusterIP访问最后发现也定向到这个D4CJ3Y6U24W4OUPV链。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-NODEPORTS -p tcp -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m tcp --dport <span class="number">30012</span> -j KUBE-SVC-D4CJ3Y6U24W4OUPV</span><br><span class="line">-A KUBE-SERVICES -d <span class="number">10.247</span>.<span class="number">97.67</span>/<span class="number">32</span> -p tcp -m comment --comment <span class="string">"default/hello-node:service0 cluster IP"</span> </span><br><span class="line">  -m tcp --dport <span class="number">80</span> -j KUBE-SVC-D4CJ3Y6U24W4OUPV</span><br></pre></td></tr></table></figure>
+
+<p>这个D4CJ3Y6U24W4OUPV链对应的规则为50%的流量进入B6YQYXVNZHOCD2LT链，另外50%进入进入另一链。这两个链分别指向两个后端pod。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-SVC-D4CJ3Y6U24W4OUPV -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m statistic --mode random --probability <span class="number">0.50000000000</span> -j KUBE-SEP-B6YQYXVNZHOCD2LT</span><br><span class="line">-A KUBE-SVC-D4CJ3Y6U24W4OUPV -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -j KUBE-SEP-IV46MKISZCOZ32CD</span><br></pre></td></tr></table></figure>
+
+<p>B6YQYXVNZHOCD2LT规则表示做DNAT，将目的地址改为容器地址172.31.0.18:80。IV46MKISZCOZ32CD表示做DNAT将目标地址改为172.31.0.3:80。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-SEP-B6YQYXVNZHOCD2LT -p tcp -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m tcp -j DNAT --to-destination <span class="number">172.31</span>.<span class="number">0.18</span>:<span class="number">80</span></span><br><span class="line">-A KUBE-SEP-IV46MKISZCOZ32CD -p tcp -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m tcp -j DNAT --to-destination <span class="number">172.31</span>.<span class="number">0.3</span>:<span class="number">80</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="userspace"><a href="#userspace" class="headerlink" title="userspace"></a>userspace</h4><p>这个跟iptables规则不同的是，kube-proxy为每个service都监听一个随机端口，流量最终是转给kube-proxy的，由它做用户空间的代理和转发。这种模式下会在iptables nat表的<code>PREROUTING</code>和<code>OUTPUT</code>链上捕捉发给本机nodePort的数据，并DNAT到本机的36463随机端口。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-NODEPORT-CONTAINER -p tcp -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m tcp --dport <span class="number">30012</span> -j REDIRECT --to-ports <span class="number">36463</span></span><br><span class="line">-A KUBE-NODEPORT-HOST -p tcp -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m tcp --dport <span class="number">30012</span> -j DNAT --to-destination <span class="number">10.120</span>.<span class="number">195.2</span>:<span class="number">36463</span></span><br></pre></td></tr></table></figure>
+
+<p>同理访问到ClusterIP的数据也会转发到本机的36463随机端口。其中前者是捕获了从容器发起的访问ClusterIP的流量，REDIRECT是DNAT的一种，意思是把数据包的目的地址转为该数据包进来时的网络接口的IP地址。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-PORTALS-CONTAINER -d <span class="number">10.247</span>.<span class="number">97.67</span>/<span class="number">32</span> -p tcp -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m tcp --dport <span class="number">80</span> -j REDIRECT --to-ports <span class="number">36463</span></span><br><span class="line">-A KUBE-PORTALS-HOST -d <span class="number">10.247</span>.<span class="number">97.67</span>/<span class="number">32</span> -p tcp -m comment --comment <span class="string">"default/hello-node:service0"</span> </span><br><span class="line">  -m tcp --dport <span class="number">80</span> -j DNAT --to-destination <span class="number">10.120</span>.<span class="number">195.2</span>:<span class="number">36463</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="kube-proxy"><a href="#kube-proxy" class="headerlink" title="kube-proxy"></a>kube-proxy</h3><p>简单来说kube-proxy不论工作在哪种模式，它代理和转发的规则都是通过service和endpoint这两种资源的变化配置的。以下是proxy启动部分的代码。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *ProxyServer)</span> <span class="title">Run</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    ...</span><br><span class="line">    informerFactory := informers.NewSharedInformerFactory(s.Client, s.ConfigSyncPeriod)</span><br><span class="line">    serviceConfig := config.NewServiceConfig(</span><br><span class="line">      informerFactory.Core().InternalVersion().Services(), s.ConfigSyncPeriod)</span><br><span class="line">    serviceConfig.RegisterEventHandler(s.ServiceEventHandler)</span><br><span class="line">    <span class="keyword">go</span> serviceConfig.Run(wait.NeverStop)</span><br><span class="line"></span><br><span class="line">    endpointsConfig := config.NewEndpointsConfig(</span><br><span class="line">      informerFactory.Core().InternalVersion().Endpoints(), s.ConfigSyncPeriod)</span><br><span class="line">    endpointsConfig.RegisterEventHandler(s.EndpointsEventHandler)</span><br><span class="line">    <span class="keyword">go</span> endpointsConfig.Run(wait.NeverStop)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">go</span> informerFactory.Start(wait.NeverStop)</span><br><span class="line">    <span class="comment">// Birth Cry after the birth is successful</span></span><br><span class="line">    s.birthCry()</span><br><span class="line">    <span class="comment">// Just loop forever for now...</span></span><br><span class="line">    s.Proxier.SyncLoop()</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>kube-proxy分了三类proxy，iptables就是根据service和endpoint的变化更新缓存，然后队列循环去刷新iptables。userspace是根据service和endpoint来创建proxySocket，并开始ProxyLoop。对每个service都创建一个proxySocket。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(tcp *tcpProxySocket)</span> <span class="title">ProxyLoop</span><span class="params">(service proxy.ServicePortName, </span></span></span><br><span class="line"><span class="function"><span class="params">    myInfo *ServiceInfo, loadBalancer LoadBalancer)</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        inConn, err := tcp.Accept()</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            ...</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line">        outConn, err := TryConnectEndpoints(service, </span><br><span class="line">           inConn.(*net.TCPConn).RemoteAddr(), <span class="string">"tcp"</span>, loadBalancer)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            inConn.Close()</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">go</span> ProxyTCP(inConn.(*net.TCPConn), outConn.(*net.TCPConn))</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>获得后向转发地址是通过loadBalancer模块实现的，然后通过dial获取后向的connection。代理的过程直接用的copyBytes也是简单粗暴。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">TryConnectEndpoints</span><span class="params">(service proxy.ServicePortName, srcAddr net.Addr, protocol <span class="keyword">string</span>, </span></span></span><br><span class="line"><span class="function"><span class="params">    loadBalancer LoadBalancer)</span> <span class="params">(out net.Conn, err error)</span></span> &#123;</span><br><span class="line">    sessionAffinityReset := <span class="literal">false</span></span><br><span class="line">    <span class="keyword">for</span> _, dialTimeout := <span class="keyword">range</span> EndpointDialTimeouts &#123;</span><br><span class="line">        endpoint, err := loadBalancer.NextEndpoint(service, srcAddr, sessionAffinityReset)</span><br><span class="line">        ....</span><br><span class="line">        glog.V(<span class="number">3</span>).Infof(<span class="string">"Mapped service %q to endpoint %s"</span>, service, endpoint)</span><br><span class="line">        outConn, err := net.DialTimeout(protocol, endpoint, dialTimeout)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            ...</span><br><span class="line">            sessionAffinityReset = <span class="literal">true</span></span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> outConn, <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>, fmt.Errorf(<span class="string">"failed to connect to an endpoint."</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">ProxyTCP</span><span class="params">(in, out *net.TCPConn)</span></span> &#123;</span><br><span class="line">    <span class="keyword">var</span> wg sync.WaitGroup</span><br><span class="line">    wg.Add(<span class="number">2</span>)</span><br><span class="line">    glog.V(<span class="number">4</span>).Infof(<span class="string">"Creating proxy between %v &lt;-&gt; %v &lt;-&gt; %v &lt;-&gt; %v"</span>,</span><br><span class="line">        in.RemoteAddr(), in.LocalAddr(), out.LocalAddr(), out.RemoteAddr())</span><br><span class="line">    <span class="keyword">go</span> copyBytes(<span class="string">"from backend"</span>, in, out, &amp;wg)</span><br><span class="line">    <span class="keyword">go</span> copyBytes(<span class="string">"to backend"</span>, out, in, &amp;wg)</span><br><span class="line">    wg.Wait()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">copyBytes</span><span class="params">(direction <span class="keyword">string</span>, dest, src *net.TCPConn, wg *sync.WaitGroup)</span></span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> wg.Done()</span><br><span class="line">    n, err := io.Copy(dest, src)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> !isClosedError(err) &#123;</span><br><span class="line">            glog.Errorf(<span class="string">"I/O error: %v"</span>, err)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    dest.Close()</span><br><span class="line">    src.Close()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="CNI"><a href="#CNI" class="headerlink" title="CNI"></a>CNI</h3><p>在kubernetes网络模型中每个Pod拥有独立的IP，Pod内的容器共享一个网络命名空间，对比下单机运行docker的情况，后者是每个容器container都是个独立的netns。k8s中通过infra容器或者叫pause容器来实现在pod中所有容器共享一个linux命名空间，不只是网络命名空间。pause相当于是这个命名空间的init进程，后续pod中的容器只是依次加入到这个命名空间。</p>
+<blockquote>
+<p>同一个集群内所有pod之间以及pod与node之间都可以通过ip直接访问，不需要经过NAT。</p>
+</blockquote>
+<p>CNI是CoreOS发起的容器网络规范，是k8s网络插件的基础。接口简单就AddNetWork和DelNetWork，他们负责给容器配置网络。常见的CNI插件有Bridge、PTP、IPVLAN、MACVLAN、vLAN、PORTMAP。Bridge就是最常用和最简单的CNI，之前写过相关原理，这种模式下多主机网络通信需要配置主机路由或者是用overLay网络。</p>
+<ol>
+<li>kubelet先创建pause容器，和对应的netns</li>
+<li>调用CNI driver，根据配置调用具体的CNI 插件，给pause容器配置网络</li>
+<li>pod中其他容器都是用这个pause容器的网络</li>
+</ol>
+<h4 id="flannel"><a href="#flannel" class="headerlink" title="flannel"></a>flannel</h4><p>这部分的图转自<a href="https://tonybai.com/2017/01/17/understanding-flannel-network-for-kubernetes/" target="_blank" rel="noopener">理解Kubernetes网络之Flannel网络</a>。在默认的docker配置中，每个节点上的docker负责各自节点容器的ip分配，这导致不同主机的ip地址可能相同。flannel的设计目的是为集群中所有节点重新规划ip地址的使用规则，使得这些不同主机的容器能够获得同属一个内网且不重复的ip地址，并使这些容器可以通过内网ip进行通信。flannel是一种overlay网络，就是将tcp数据包装在另一种网络包里进行路由转发和通信，民居前支持UDP VxLAN等方式。</p>
+<ol>
+<li>为集群内每个节点分配子网，容器将自动从该子网中获取ip地址</li>
+<li>当有新的节点加入到网络时，为每个node增加路由配置</li>
+</ol>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/flannel.png" alt></p>
+<blockquote>
+<p>不同节点docker怎么使用不同ip地址</p>
+</blockquote>
+<p>flannel通过etcd分配了每个节点可用的ip地址段，修改了docker的启动参数，通过–bip限制了docker0分配的容器ip范围，flannel确保给每个节点的ip地址段是不重复的。</p>
+<blockquote>
+<p>路由表怎么改</p>
+</blockquote>
+<p>通常flannel跟docker的网络段是包含关系，所以发到docker0的数据查询route就会发现跟flannel0对应的网络是直连，因此发到flannel0。如果发现网段不匹配，重启docker和flanneld。</p>
+<blockquote>
+<p>overlay的转发方式 udp vxlan</p>
+</blockquote>
+<p>如果是VxLAN的方式，则flannel0收到后不会转发给eth0，因为它是个vxlan设备，即virtual tunnel end point。flannel0发现目的地址不是自己，但在直连网络中。这时并不会arp直接问mac地址，内核会为vxlan设备引发一个L3 miss事件，并把arp请求发到用户空间的flanned进程。</p>
+<p>flanneld会从etcd当中找子网对应的vxlan对端vtep设备的mac地址，并写入节点的arp缓存，然后内核就用这个mac地址封装以太帧。这个帧实际是vxlan隧道上的包，不能在物理网络传输。内核会再次封包，向flanneld发起L2 miss事件，通过etcd获取vtep设备对应的node的IP，并注册到fdb。</p>
+<p><img src="/2018/01/21/kube-proxy/%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E5%92%8CKube-Proxy%E7%AC%94%E8%AE%B0%E6%95%B4%E7%90%86/vxlan.png" alt></p>
+<p>最后这个包把整个上面的以太包封城了udp包，然后再IP+mac封好，发到对端节点上。对端节点揭开udp包发现时vxlan包，于是拆包后将这个包发给本机的flannel0设备。</p>
+<h4 id="calico-amp-weave-amp-canal"><a href="#calico-amp-weave-amp-canal" class="headerlink" title="calico &amp; weave &amp; canal"></a>calico &amp; weave &amp; canal</h4><p>calico是个纯三层的数据中心网络方案，不需要overlay。每个容器都分配了一个可路由的ip，通信时不需要解包和封包网络性能损耗小。weave是去中心化的方案，通过每个host运行wRouter，并保持TCP连接。我们貌似用的是cannel，结合了flannel和calico。采用flnnael的vxlan实现host2host的通信，同时基于calico的网络策略能力实现了pod之间的网络隔离。</p>
+<h3 id="问题分析和解决"><a href="#问题分析和解决" class="headerlink" title="问题分析和解决"></a>问题分析和解决</h3><p>这个是同事前两年写的，<a href="https://bbs.huaweicloud.com/blogs/c2c312ebac9411e69023286ed488c65c" target="_blank" rel="noopener">几个容器网络相关问题的分析和解决总结</a>。居然在论坛上找到了，转载一下。</p>
+<blockquote>
+<p>能跨host访问docker0，而无法访问pod ip</p>
+</blockquote>
+<p>检查ip_forward参数是否为1，若不为1则内核收到来自docker0的非本地地址的数据包会丢弃，而不会转发出去。</p>
+<blockquote>
+<p>flannel隧道内部payload的源地址改变为flannel0设备的地址</p>
+</blockquote>
+<p>iptables规则有一条，所有从docker0地址发出的数据修改为出站时的地址。</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A POSTROUTING -s <span class="number">10.1</span>.<span class="number">15.0</span>/<span class="number">24</span> ! -o docker0 -j MASQUERADE</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>如果容器可以ping通host，但ping不通别的host ip</p>
+</blockquote>
+<p>可能是缺少从容器出去做SNAT的iptables规则</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -t nat -A POSTING -s <span class="number">172.16</span>.<span class="number">94.0</span>/<span class="number">24</span> -j SNAT -to <span class="number">10.120</span>.<span class="number">195.2</span></span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>k8s集群掉线之后所有服务不可访问</p>
+</blockquote>
+<p>docker0和flannel0的网路配置不一样，网段不同，导致双方无法通信。flannel的网路配置在etcd中，所以以它为准，重启docker0并修改–bip保证网段范围和flannel0是一致的。</p>
+<blockquote>
+<p>k8s master机器上ping不通node节点的docker0和容器，但在node上可以</p>
+</blockquote>
+<p>master节点上在INPUT和FORWARD链上拒绝了icmp包，删除就好。</p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/network/" rel="tag"># network</a>
+          
+            <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/01/10/kubecontroller/" rel="next" title="KubeController异步事件处理Infomer的实现">
+                <i class="fa fa-chevron-left"></i> KubeController异步事件处理Infomer的实现
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/02/18/go-net/" rel="prev" title="IO多路复用与Go网络库的实现">
+                IO多路复用与Go网络库的实现 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/nino.jpg" alt="nino">
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <div class="site-description motion-element" itemprop="description"></div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">26</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">10</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/ninokop" title="GitHub &rarr; https://github.com/ninokop" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://weibo.com/u/1732126300" title="Weibo &rarr; https://weibo.com/u/1732126300" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#Linux-Bridge"><span class="nav-number">1.</span> <span class="nav-text">Linux Bridge</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#创建net命名空间模拟docker0"><span class="nav-number">1.1.</span> <span class="nav-text">创建net命名空间模拟docker0</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#在docker0添加网卡"><span class="nav-number">1.2.</span> <span class="nav-text">在docker0添加网卡</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#iptables"><span class="nav-number">2.</span> <span class="nav-text">iptables</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#iptables-log"><span class="nav-number">2.1.</span> <span class="nav-text">iptables log</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#docker网络"><span class="nav-number">3.</span> <span class="nav-text">docker网络</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#四种原生网络模式"><span class="nav-number">3.1.</span> <span class="nav-text">四种原生网络模式</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#容器到容器"><span class="nav-number">3.2.</span> <span class="nav-text">容器到容器</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#容器到主机"><span class="nav-number">3.3.</span> <span class="nav-text">容器到主机</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#端口映射"><span class="nav-number">3.4.</span> <span class="nav-text">端口映射</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#kube-service"><span class="nav-number">4.</span> <span class="nav-text">kube-service</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#iptables-1"><span class="nav-number">4.1.</span> <span class="nav-text">iptables</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#userspace"><span class="nav-number">4.2.</span> <span class="nav-text">userspace</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#kube-proxy"><span class="nav-number">5.</span> <span class="nav-text">kube-proxy</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#CNI"><span class="nav-number">6.</span> <span class="nav-text">CNI</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#flannel"><span class="nav-number">6.1.</span> <span class="nav-text">flannel</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#calico-amp-weave-amp-canal"><span class="nav-number">6.2.</span> <span class="nav-text">calico &amp; weave &amp; canal</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#问题分析和解决"><span class="nav-number">7.</span> <span class="nav-text">问题分析和解决</span></a></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

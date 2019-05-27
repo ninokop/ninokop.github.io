@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="Kubelet的功能简单总结就是根据系统中pod的变化，来处理pod的生命周期。它向下通过底层docker等接口处理pod的启动 更新停止，它向上通过list watch获取pod的信息来做任务识别和分发。这一节主要总结下kubelet三个数据来源合并的过程，代码参考1.7版本，是17年写的了，最近整理搬运到博客。 kubelet的Pod来源有三个，分别是manifest http以及apiser">
+<meta name="keywords" content="Kubernetes">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubelet数据源的合并">
+<meta property="og:url" content="http://yoursite.com/2018/01/09/kubelete/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="Kubelet的功能简单总结就是根据系统中pod的变化，来处理pod的生命周期。它向下通过底层docker等接口处理pod的启动 更新停止，它向上通过list watch获取pod的信息来做任务识别和分发。这一节主要总结下kubelet三个数据来源合并的过程，代码参考1.7版本，是17年写的了，最近整理搬运到博客。 kubelet的Pod来源有三个，分别是manifest http以及apiser">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2018/01/09/kubelete/Kubelet%E6%95%B0%E6%8D%AE%E6%BA%90%E7%9A%84%E5%90%88%E5%B9%B6/channel.jpg">
+<meta property="og:updated_time" content="2019-05-26T10:50:58.152Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Kubelet数据源的合并">
+<meta name="twitter:description" content="Kubelet的功能简单总结就是根据系统中pod的变化，来处理pod的生命周期。它向下通过底层docker等接口处理pod的启动 更新停止，它向上通过list watch获取pod的信息来做任务识别和分发。这一节主要总结下kubelet三个数据来源合并的过程，代码参考1.7版本，是17年写的了，最近整理搬运到博客。 kubelet的Pod来源有三个，分别是manifest http以及apiser">
+<meta name="twitter:image" content="http://yoursite.com/2018/01/09/kubelete/Kubelet%E6%95%B0%E6%8D%AE%E6%BA%90%E7%9A%84%E5%90%88%E5%B9%B6/channel.jpg">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2018/01/09/kubelete/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>Kubelet数据源的合并 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/01/09/kubelete/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Kubelet数据源的合并
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2018-01-09 19:44:38" itemprop="dateCreated datePublished" datetime="2018-01-09T19:44:38+08:00">2018-01-09</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-26 18:50:58" itemprop="dateModified" datetime="2019-05-26T18:50:58+08:00">2019-05-26</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/Kubernetes/" itemprop="url" rel="index"><span itemprop="name">Kubernetes</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>Kubelet的功能简单总结就是根据系统中pod的变化，来处理pod的生命周期。它向下通过底层docker等接口处理pod的启动 更新停止，它向上通过list watch获取pod的信息来做任务识别和分发。这一节主要总结下kubelet三个数据来源合并的过程，代码参考1.7版本，是17年写的了，最近整理搬运到博客。</p>
+<p>kubelet的Pod来源有三个，分别是manifest http以及apiserver。三者通过mux提供的三个channel给mux发送event。mux中开启三个协程去分别处理每种source到来的event，也就是pod。mux的处理过程就是将chan上收到的pod交给podstorage去merge。merge的过程就是跟本地的pod缓存比较，然后分解出不同事件往podstorage的update chan上统一的发送事件。这个chan通过<code>Updates()</code>方法被<code>kubelet.Run</code>使用。</p>
+<p><img src="/2018/01/09/kubelete/Kubelet%E6%95%B0%E6%8D%AE%E6%BA%90%E7%9A%84%E5%90%88%E5%B9%B6/channel.jpg" alt="chan数据流"></p>
+<h2 id="Kubelet的启动"><a href="#Kubelet的启动" class="headerlink" title="Kubelet的启动"></a>Kubelet的启动</h2><p>Kubelet的工作原理是通过三种途径获得Pod，由<code>KubeletBootstrap</code>实现的Run方法根据事件种类的不同来分发和处理Pod。其中连接具体工作和Pod来源的通道是<code>podCfg.Updates()</code>返回的chan。今天总结下ListWatch结果和Kubelet主线程之间通信的过程。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">startKubelet</span><span class="params">(k kubelet.KubeletBootstrap, podCfg *config.PodConfig)</span></span> &#123;</span><br><span class="line">    <span class="comment">// start the kubelet</span></span><br><span class="line">    <span class="keyword">go</span> wait.Until(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123; k.Run(podCfg.Updates()) &#125;, <span class="number">0</span>, wait.NeverStop)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在函数<code>makePodSourceConfig</code>中PodConfig通过<code>cfg.Channel</code>合并了三种Pod的来源，包括放在固定目录的manifest，以及HTTP请求，以及<code>ListWatch</code>获得的Pod变化。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">makePodSourceConfig</span><span class="params">(...)</span> <span class="params">(*config.PodConfig, error)</span></span> &#123;</span><br><span class="line">    cfg := config.NewPodConfig(config.PodConfigNotificationIncremental, ...)</span><br><span class="line">    <span class="comment">// define watching apiserver</span></span><br><span class="line">    <span class="keyword">if</span> kubeDeps.KubeClient != <span class="literal">nil</span> &#123;</span><br><span class="line">        config.NewSourceApiserver(kubeDeps.KubeClient, nodeName, </span><br><span class="line">        cfg.Channel(kubetypes.ApiserverSource))</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> cfg</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="PodConfig的实现"><a href="#PodConfig的实现" class="headerlink" title="PodConfig的实现"></a>PodConfig的实现</h2><h3 id="podStorage"><a href="#podStorage" class="headerlink" title="podStorage"></a>podStorage</h3><p>storage是Pod的全部缓存，其中包含有updates这个chan，且storage负责单向向chan上写数据，即更新Pod的结果。这个chan通过PodConfig的<code>Updates()</code>方法对外提供读取chan上Pod的信息的方法，没有读取将阻塞。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> PodConfig <span class="keyword">struct</span> &#123;</span><br><span class="line">	pods *podStorage</span><br><span class="line">	mux  *config.Mux</span><br><span class="line"></span><br><span class="line">	<span class="comment">// the channel of denormalized changes passed to listeners</span></span><br><span class="line">	updates <span class="keyword">chan</span> kubetypes.PodUpdate</span><br><span class="line"></span><br><span class="line">	<span class="comment">// contains the list of all configured sources</span></span><br><span class="line">	sourcesLock sync.Mutex</span><br><span class="line">	sources     sets.String</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> podStorage <span class="keyword">struct</span> &#123;</span><br><span class="line">    podLock sync.RWMutex</span><br><span class="line">    <span class="comment">// map of source name to pod uid to pod reference</span></span><br><span class="line">    pods <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">map</span>[types.UID]*v1.Pod</span><br><span class="line">    mode PodConfigNotificationMode</span><br><span class="line">    <span class="comment">// ensures that updates are delivered in strict order</span></span><br><span class="line">    <span class="comment">// on the updates channel</span></span><br><span class="line">    updateLock sync.Mutex</span><br><span class="line">    updates    <span class="keyword">chan</span>&lt;- kubetypes.PodUpdate</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *PodConfig)</span> <span class="title">Updates</span><span class="params">()</span> &lt;-<span class="title">chan</span> <span class="title">kubetypes</span>.<span class="title">PodUpdate</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> c.updates</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>podStorage实现了Merge接口，提供<code>Merge(source string, change interface{})</code>方法。它识别从不同源来的change事件，并根据change 的类型对pod进行merge。如果是apiserver源的Pod，最终类型都是SET，这时从storage中读取的pods为oldPods，跟change中的所有合法的newPods比较，如果oldPods中没有则属于AddPods，如果oldPods有则决定是需要update还是reconcile还是delete。另外如果oldPods中有而newPods中没有则removePods。操作podstorage的过程podLock要上锁。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">updatePodsFunc := <span class="function"><span class="keyword">func</span><span class="params">(newPods []*v1.Pod, oldPods, pods <span class="keyword">map</span>[types.UID]*v1.Pod)</span></span> &#123;</span><br><span class="line">    filtered := filterInvalidPods(newPods, source, s.recorder)</span><br><span class="line">    <span class="keyword">for</span> _, ref := <span class="keyword">range</span> filtered &#123;</span><br><span class="line">        <span class="comment">// Annotate the pod with the source before any comparison.</span></span><br><span class="line">        <span class="keyword">if</span> ref.Annotations == <span class="literal">nil</span> &#123;</span><br><span class="line">            ref.Annotations = <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>)</span><br><span class="line">        &#125;</span><br><span class="line">        ref.Annotations[kubetypes.ConfigSourceAnnotationKey] = source</span><br><span class="line">        <span class="keyword">if</span> existing, found := oldPods[ref.UID]; found &#123;</span><br><span class="line">            pods[ref.UID] = existing</span><br><span class="line">            needUpdate, needReconcile, needGracefulDelete := checkAndUpdatePod(existing, ref)</span><br><span class="line">            <span class="keyword">if</span> needUpdate &#123;</span><br><span class="line">                updatePods = <span class="built_in">append</span>(updatePods, existing)</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> needReconcile &#123;</span><br><span class="line">                reconcilePods = <span class="built_in">append</span>(reconcilePods, existing)</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> needGracefulDelete &#123;</span><br><span class="line">                deletePods = <span class="built_in">append</span>(deletePods, existing)</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line">        recordFirstSeenTime(ref)</span><br><span class="line">        pods[ref.UID] = ref</span><br><span class="line">        addPods = <span class="built_in">append</span>(addPods, ref)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从不同Pod源整理出remove, add, update, delete的Pod后，依次往podstorage的updates chan上写数据，这个过程updateLock要上锁。</p>
+<h3 id="mux"><a href="#mux" class="headerlink" title="mux"></a>mux</h3><p>mux用于实现源合并，它维护了每种source对应的chan，并通过<code>Channel(source string)</code>方法返回。该方法同时开启一个<code>listen</code>的goroutine，一旦这个chan上有数据写入，就读取并通过mux的<code>merge</code>进行合并。也就是这个podstorage的数据来源是mux暴露给外界的，让不同源可以写入的。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Mux)</span> <span class="title">Channel</span><span class="params">(source <span class="keyword">string</span>)</span> <span class="title">chan</span> <span class="title">interface</span></span>&#123;&#125; &#123;</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(source) == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="built_in">panic</span>(<span class="string">"Channel given an empty name"</span>)</span><br><span class="line">    &#125;</span><br><span class="line">    m.sourceLock.Lock()</span><br><span class="line">    <span class="keyword">defer</span> m.sourceLock.Unlock()</span><br><span class="line">    channel, exists := m.sources[source]</span><br><span class="line">    <span class="keyword">if</span> exists &#123;</span><br><span class="line">        <span class="keyword">return</span> channel</span><br><span class="line">    &#125;</span><br><span class="line">    newChannel := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">interface</span>&#123;&#125;)</span><br><span class="line">    m.sources[source] = newChannel</span><br><span class="line">    <span class="keyword">go</span> wait.Until(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123; m.listen(source, newChannel) &#125;, <span class="number">0</span>, wait.NeverStop)</span><br><span class="line">    <span class="keyword">return</span> newChannel</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Mux)</span> <span class="title">listen</span><span class="params">(source <span class="keyword">string</span>, listenChannel &lt;-<span class="keyword">chan</span> <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> update := <span class="keyword">range</span> listenChannel &#123;</span><br><span class="line">        m.merger.Merge(source, update)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个chan通过PodConfig的Channel方法提供给外部使用，每种源通过<code>cfg.Channel(sourceName)</code>来写入数据到mux，mux通过merge最终将数据合并到podStorage。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *PodConfig)</span> <span class="title">Channel</span><span class="params">(source <span class="keyword">string</span>)</span> <span class="title">chan</span>&lt;- <span class="title">interface</span></span>&#123;&#125; &#123;</span><br><span class="line">    c.sourcesLock.Lock()</span><br><span class="line">    <span class="keyword">defer</span> c.sourcesLock.Unlock()</span><br><span class="line">    c.sources.Insert(source)</span><br><span class="line">    <span class="keyword">return</span> c.mux.Channel(source)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="apiserver源的实现"><a href="#apiserver源的实现" class="headerlink" title="apiserver源的实现"></a>apiserver源的实现</h2><p>如上所述，updates是一个允许每个源单向写入的chan。APIServer这个源通过<code>reflector</code>来实现对Pod对象的<code>ListWatch</code>，它通过<code>client-go/tools/cache</code>这个包提供对reflector的实现。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewSourceApiserver</span><span class="params">(c clientset.Interface, nodeName types.NodeName, </span></span></span><br><span class="line"><span class="function"><span class="params">                        updates <span class="keyword">chan</span>&lt;- <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    lw := cache.NewListWatchFromClient(c.Core().RESTClient(), <span class="string">"pods"</span>, metav1.NamespaceAll,</span><br><span class="line">    fields.OneTermEqualSelector(api.PodHostField, <span class="keyword">string</span>(nodeName)))</span><br><span class="line">    newSourceApiserverFromLW(lw, updates)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newSourceApiserverFromLW</span><span class="params">(lw cache.ListerWatcher, updates <span class="keyword">chan</span>&lt;- <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    send := <span class="function"><span class="keyword">func</span><span class="params">(objs []<span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">        <span class="keyword">var</span> pods []*v1.Pod</span><br><span class="line">        <span class="keyword">for</span> _, o := <span class="keyword">range</span> objs &#123;</span><br><span class="line">            pods = <span class="built_in">append</span>(pods, o.(*v1.Pod))</span><br><span class="line">        &#125;</span><br><span class="line">        updates &lt;- kubetypes.PodUpdate&#123;Pods: pods, Op: kubetypes.SET, </span><br><span class="line">                   Source: kubetypes.ApiserverSource&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    cache.NewReflector(lw, &amp;v1.Pod&#123;&#125;, </span><br><span class="line">      cache.NewUndeltaStore(send, cache.MetaNamespaceKeyFunc), <span class="number">0</span>).Run()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Reflector"><a href="#Reflector" class="headerlink" title="Reflector"></a>Reflector</h3><p>reflector对象主要的成员就是listerWatcher，store则是NewReflector外部的store，reflector就是把list和watch到的结果set到store里面。<code>reflector.Run()</code> 开启新协程去执行<code>ListAndWatch()</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Reflector <span class="keyword">struct</span> &#123;</span><br><span class="line">    name <span class="keyword">string</span></span><br><span class="line">    <span class="comment">// The type of object we expect to place in the store.</span></span><br><span class="line">    expectedType reflect.Type</span><br><span class="line">    <span class="comment">// The destination to sync up with the watch source</span></span><br><span class="line">    store Store</span><br><span class="line">    <span class="comment">// listerWatcher is used to perform lists and watches.</span></span><br><span class="line">    listerWatcher ListerWatcher</span><br><span class="line">    <span class="comment">// period controls timing between one watch ending and</span></span><br><span class="line">    <span class="comment">// the beginning of the next one.</span></span><br><span class="line">    period       time.Duration</span><br><span class="line">    resyncPeriod time.Duration</span><br><span class="line">    ShouldResync <span class="function"><span class="keyword">func</span><span class="params">()</span> <span class="title">bool</span></span></span><br><span class="line"><span class="function">    // <span class="title">clock</span> <span class="title">allows</span> <span class="title">tests</span> <span class="title">to</span> <span class="title">manipulate</span> <span class="title">time</span></span></span><br><span class="line"><span class="function">    <span class="title">clock</span> <span class="title">clock</span>.<span class="title">Clock</span></span></span><br><span class="line"><span class="function">    // <span class="title">lastSyncResourceVersion</span> <span class="title">is</span> <span class="title">the</span> <span class="title">resource</span> <span class="title">version</span> <span class="title">token</span> <span class="title">last</span></span></span><br><span class="line"><span class="function">    // <span class="title">observed</span> <span class="title">when</span> <span class="title">doing</span> <span class="title">a</span> <span class="title">sync</span> <span class="title">with</span> <span class="title">the</span> <span class="title">underlying</span> <span class="title">store</span></span></span><br><span class="line"><span class="function">    // <span class="title">it</span> <span class="title">is</span> <span class="title">thread</span> <span class="title">safe</span>, <span class="title">but</span> <span class="title">not</span> <span class="title">synchronized</span> <span class="title">with</span> <span class="title">the</span> <span class="title">underlying</span> <span class="title">store</span></span></span><br><span class="line"><span class="function">    <span class="title">lastSyncResourceVersion</span> <span class="title">string</span></span></span><br><span class="line"><span class="function">    <span class="title">lastSyncResourceVersionMutex</span> <span class="title">sync</span>.<span class="title">RWMutex</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(r *Reflector)</span> <span class="title">Run</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">go</span> wait.Until(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">if</span> err := r.ListAndWatch(wait.NeverStop); err != <span class="literal">nil</span> &#123;</span><br><span class="line">            utilruntime.HandleError(err)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;, r.period, wait.NeverStop)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>list会触发一次store的同步，在syncWith中执行store.Replace，并记录这次同步的resourceVersion。之后将开启goroutine去处理定时同步。在开启的watch循环中，设置watch的options包括resourceVersion和timeout时间。这里reflector为了避免watcher的挂起，设置了timeout时间，它会停止在该时间窗内不能获得任何事件的watchers。Watch最后返回的接口提供两个方法，可停止Watch，可从中获取Watch事件。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Interface <span class="keyword">interface</span> &#123;</span><br><span class="line">    <span class="comment">// Stops watching. Will close the channel returned by ResultChan(). Releases</span></span><br><span class="line">    <span class="comment">// any resources used by the watch.</span></span><br><span class="line">    Stop()</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Returns a chan which will receive all the events. If an error occurs</span></span><br><span class="line">    <span class="comment">// or Stop() is called, this channel will be closed, in which case the</span></span><br><span class="line">    <span class="comment">// watch should be completely cleaned up.</span></span><br><span class="line">    ResultChan() &lt;-<span class="keyword">chan</span> Event</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>当无错误建立起watch通道，获得watch.Interface后，reflector调用watchHandler去处理。它就是从ResultChan中获取事件更新到store，同时更新resourceVersion。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *Reflector)</span> <span class="title">watchHandler</span><span class="params">(w watch.Interface, resourceVersion *<span class="keyword">string</span>,</span></span></span><br><span class="line"><span class="function"><span class="params">    errc <span class="keyword">chan</span> error, stopCh &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    start := r.clock.Now()</span><br><span class="line">    eventCount := <span class="number">0</span></span><br><span class="line">    <span class="keyword">defer</span> w.Stop()</span><br><span class="line"></span><br><span class="line">loop:</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> &lt;-stopCh:</span><br><span class="line">            <span class="keyword">return</span> errorStopRequested</span><br><span class="line">        <span class="keyword">case</span> err := &lt;-errc:</span><br><span class="line">            <span class="keyword">return</span> err</span><br><span class="line">        <span class="keyword">case</span> event, ok := &lt;-w.ResultChan():</span><br><span class="line">            <span class="keyword">if</span> !ok &#123;</span><br><span class="line">                <span class="keyword">break</span> loop</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> event.Type == watch.Error &#123;</span><br><span class="line">                <span class="keyword">return</span> apierrs.FromObject(event.Object)</span><br><span class="line">            &#125;</span><br><span class="line">            ...</span><br><span class="line">            newResourceVersion := meta.GetResourceVersion()</span><br><span class="line">            <span class="keyword">switch</span> event.Type &#123;</span><br><span class="line">            <span class="keyword">case</span> watch.Added:</span><br><span class="line">                err := r.store.Add(event.Object)</span><br><span class="line">                ...</span><br><span class="line">            <span class="keyword">case</span> watch.Modified:</span><br><span class="line">                err := r.store.Update(event.Object)</span><br><span class="line">                ...</span><br><span class="line">            <span class="keyword">case</span> watch.Deleted:</span><br><span class="line">                err := r.store.Delete(event.Object)</span><br><span class="line">                ...</span><br><span class="line">            <span class="keyword">default</span>:</span><br><span class="line">                ...</span><br><span class="line">            &#125;</span><br><span class="line">            *resourceVersion = newResourceVersion</span><br><span class="line">            r.setLastSyncResourceVersion(newResourceVersion)</span><br><span class="line">            eventCount++</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    watchDuration := r.clock.Now().Sub(start)</span><br><span class="line">    <span class="keyword">if</span> watchDuration &lt; <span class="number">1</span>*time.Second &amp;&amp; eventCount == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="comment">//watch lasted less than a second and no items received</span></span><br><span class="line">        <span class="keyword">return</span> errors.New(<span class="string">"very short watch"</span>)</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="UndeltaStore"><a href="#UndeltaStore" class="headerlink" title="UndeltaStore"></a>UndeltaStore</h3><p>reflector最终操作的store，kubelet中使用的是UndeltaStore，它是Store的一层封装，加入了PushFunc。在每次Add或UpdateDelete操作时，都执行注册的PushFunc将完整的Store.List() Push出去。这里的PushFunc是往apiserver源的chan上push数据。</p>
+<blockquote>
+<p>为什么要完整的store.List，而不是只push增量呢。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> UndeltaStore <span class="keyword">struct</span> &#123;</span><br><span class="line">	Store</span><br><span class="line">	PushFunc <span class="function"><span class="keyword">func</span><span class="params">([]<span class="keyword">interface</span>&#123;&#125;)</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(u *UndeltaStore)</span> <span class="title">Add</span><span class="params">(obj <span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> err := u.Store.Add(obj); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	u.PushFunc(u.Store.List())</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里的Store是个实现增删改查等方法的接口，它是线程安全的Store的一层封装，对外提供对单一对象obj的接口，通过keyfunc从obj提取存储的key值，而<code>ThreadSafeStore</code>则提供根据key-value更新存储的接口，比如<code>Add(key string, obj interface{})</code>，其中ThreadSafeStore通过treadSafeMap实现的。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// NewStore returns a Store implemented simply with a map and a lock.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewStore</span><span class="params">(keyFunc KeyFunc)</span> <span class="title">Store</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> &amp;cache&#123;</span><br><span class="line">        cacheStorage: NewThreadSafeStore(Indexers&#123;&#125;, Indices&#123;&#125;),</span><br><span class="line">        keyFunc:      keyFunc,</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// threadSafeMap implements ThreadSafeStore</span></span><br><span class="line"><span class="keyword">type</span> threadSafeMap <span class="keyword">struct</span> &#123;</span><br><span class="line">    lock  sync.RWMutex</span><br><span class="line">    items <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">interface</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// indexers maps a name to an IndexFunc</span></span><br><span class="line">    indexers Indexers</span><br><span class="line">    <span class="comment">// indices maps a name to an Index</span></span><br><span class="line">    indices Indices</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Question"><a href="#Question" class="headerlink" title="Question"></a>Question</h2><ol>
+<li>reflector的store当中pushfunc为什么每次push所有的store，而不是只取增量。</li>
+<li>updates chan阻塞会发生什么</li>
+</ol>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><p><a href="https://www.jianshu.com/p/06ace03a0ae4" target="_blank" rel="noopener">kubernetes1.9源码阅读 kubelet对pod资源的watch</a></p>
+<p><a href="http://blog.csdn.net/u013812710/article/details/70192502" target="_blank" rel="noopener">kubelet之store</a></p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/12/14/tcp-connection/" rel="next" title="TCP 连接建立与断开">
+                <i class="fa fa-chevron-left"></i> TCP 连接建立与断开
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/01/10/kubecontroller/" rel="prev" title="KubeController异步事件处理Infomer的实现">
+                KubeController异步事件处理Infomer的实现 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/nino.jpg" alt="nino">
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <div class="site-description motion-element" itemprop="description"></div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">26</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">10</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/ninokop" title="GitHub &rarr; https://github.com/ninokop" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://weibo.com/u/1732126300" title="Weibo &rarr; https://weibo.com/u/1732126300" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Kubelet的启动"><span class="nav-number">1.</span> <span class="nav-text">Kubelet的启动</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#PodConfig的实现"><span class="nav-number">2.</span> <span class="nav-text">PodConfig的实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#podStorage"><span class="nav-number">2.1.</span> <span class="nav-text">podStorage</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#mux"><span class="nav-number">2.2.</span> <span class="nav-text">mux</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#apiserver源的实现"><span class="nav-number">3.</span> <span class="nav-text">apiserver源的实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Reflector"><span class="nav-number">3.1.</span> <span class="nav-text">Reflector</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#UndeltaStore"><span class="nav-number">3.2.</span> <span class="nav-text">UndeltaStore</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Question"><span class="nav-number">4.</span> <span class="nav-text">Question</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference"><span class="nav-number">5.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="go-grpc-middleware这个项目对gRPC的interceptor进行了封装，支持多个拦截器的链式组装。最近正好在看gRPC的拦截器和这个grpc-middleware，发现跟我们做的handlerChain类似，其他go-web框架通常也有自身的filter功能实现对其入口出口消息的拦截，这里总结一下实现方式。 gRPC Interceptor客户端和服务端都可以在初始化时注册拦截">
+<meta name="keywords" content="micro-service,RPC">
+<meta property="og:type" content="article">
+<meta property="og:title" content="gRPC interceptor">
+<meta property="og:url" content="http://yoursite.com/2017/11/13/grpc-interceptor/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="go-grpc-middleware这个项目对gRPC的interceptor进行了封装，支持多个拦截器的链式组装。最近正好在看gRPC的拦截器和这个grpc-middleware，发现跟我们做的handlerChain类似，其他go-web框架通常也有自身的filter功能实现对其入口出口消息的拦截，这里总结一下实现方式。 gRPC Interceptor客户端和服务端都可以在初始化时注册拦截">
+<meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2019-05-26T10:47:43.215Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="gRPC interceptor">
+<meta name="twitter:description" content="go-grpc-middleware这个项目对gRPC的interceptor进行了封装，支持多个拦截器的链式组装。最近正好在看gRPC的拦截器和这个grpc-middleware，发现跟我们做的handlerChain类似，其他go-web框架通常也有自身的filter功能实现对其入口出口消息的拦截，这里总结一下实现方式。 gRPC Interceptor客户端和服务端都可以在初始化时注册拦截">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2017/11/13/grpc-interceptor/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>gRPC interceptor | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/11/13/grpc-interceptor/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">gRPC interceptor
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2017-11-13 20:22:37" itemprop="dateCreated datePublished" datetime="2017-11-13T20:22:37+08:00">2017-11-13</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-26 18:47:43" itemprop="dateModified" datetime="2019-05-26T18:47:43+08:00">2019-05-26</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/RPC/" itemprop="url" rel="index"><span itemprop="name">RPC</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p> <a href="https://github.com/grpc-ecosystem/go-grpc-middleware" target="_blank" rel="noopener">go-grpc-middleware</a>这个项目对gRPC的interceptor进行了封装，支持多个拦截器的链式组装。最近正好在看gRPC的拦截器和这个grpc-middleware，发现跟我们做的handlerChain类似，其他go-web框架通常也有自身的filter功能实现对其入口出口消息的拦截，这里总结一下实现方式。</p>
+<h2 id="gRPC-Interceptor"><a href="#gRPC-Interceptor" class="headerlink" title="gRPC Interceptor"></a>gRPC Interceptor</h2><p>客户端和服务端都可以在初始化时注册拦截器，现在middleware里提供的中间件拦截器包含auth，添加context的request header的ctxtags，支持zap/logrus日志库，支持prometheus监控上报，支持opentracing，客户端支持重试retry，服务端支持校验和恢复等功能。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ServerInterceptor</span></span><br><span class="line">s := grpc.NewServer(grpc.StreamInterceptor(grpc_ctxtags.StreamServerInterceptor()),</span><br><span class="line">    grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(</span><br><span class="line">        grpc_ctxtags.UnaryServerInterceptor(),</span><br><span class="line">        grpc_opentracing.UnaryServerInterceptor(),</span><br><span class="line">        grpc_prometheus.UnaryServerInterceptor,</span><br><span class="line">        grpc_zap.UnaryServerInterceptor(zapLogger),</span><br><span class="line">        grpc_auth.UnaryServerInterceptor(myAuthFunction),</span><br><span class="line">        grpc_recovery.UnaryServerInterceptor(),</span><br><span class="line">    )),</span><br><span class="line">)</span><br><span class="line"><span class="comment">// ClientInterceptor</span></span><br><span class="line">conn, err := grpc.Dial(address, grpc.WithInsecure(),</span><br><span class="line">    grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor),</span><br><span class="line">    grpc.WithUnaryInterceptor(grpc_retry.UnaryServerInterceptor),</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<h3 id="server"><a href="#server" class="headerlink" title="server"></a>server</h3><p>server侧在注册的handler里留有interceptor的接口，当它不为空时调用interceptor去处理，这时service原有的handler作为参数交给interceptor，供其调用。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> _<span class="title">Greeter_SayHello_Handler</span><span class="params">(srv <span class="keyword">interface</span>&#123;&#125;, ctx context.Context, </span></span></span><br><span class="line"><span class="function"><span class="params">     dec <span class="keyword">func</span>(<span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">error</span>, </span></span><br><span class="line"><span class="function">     <span class="title">interceptor</span> <span class="title">grpc</span>.<span class="title">UnaryServerInterceptor</span>) <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">    in := <span class="built_in">new</span>(HelloRequest)</span><br><span class="line">    <span class="keyword">if</span> err := dec(in); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> interceptor == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> srv.(GreeterServer).SayHello(ctx, in)</span><br><span class="line">    &#125;</span><br><span class="line">    info := &amp;grpc.UnaryServerInfo&#123;</span><br><span class="line">        Server:     srv,</span><br><span class="line">        FullMethod: <span class="string">"/helloworld.Greeter/SayHello"</span>,</span><br><span class="line">    &#125;</span><br><span class="line">    handler := <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">        <span class="keyword">return</span> srv.(GreeterServer).SayHello(ctx, req.(*HelloRequest))</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> interceptor(ctx, in, info, handler)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>interceptor就是一个func类型，其返回值和Handler的返回值相同。这是opentracing实现的interceptor，通常在拦截器中执行handler前后会加入拦截器自己的逻辑。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> UnaryServerInterceptor <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, </span></span></span><br><span class="line"><span class="function"><span class="params">     info *UnaryServerInfo, handler UnaryHandler)</span> <span class="params">(resp <span class="keyword">interface</span>&#123;&#125;, err error)</span></span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">UnaryServerInterceptor</span><span class="params">(opts ...Option)</span> <span class="title">grpc</span>.<span class="title">UnaryServerInterceptor</span></span> &#123;</span><br><span class="line">    o := evaluateOptions(opts)</span><br><span class="line">    <span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo,</span></span></span><br><span class="line"><span class="function"><span class="params">        handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">        newCtx, serverSpan := newServerSpanFromInbound(ctx, o.tracer, info.FullMethod)</span><br><span class="line">        resp, err := handler(newCtx, req)</span><br><span class="line">        finishServerSpan(ctx, serverSpan, err)</span><br><span class="line">        <span class="keyword">return</span> resp, err</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="client"><a href="#client" class="headerlink" title="client"></a>client</h3><p>客户端的调用经过grpc.Invoke，在invoke中实现了interceptor的调用。跟server侧的实现类似，client拦截器参数包含invoke，供拦截器实现方调用。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *userClient)</span> <span class="title">QueryUser</span><span class="params">(ctx context.Context, in *UserRequest, opts ...grpc.CallOption)</span> <span class="params">(*UserResponse, error)</span></span> &#123;</span><br><span class="line">    out := <span class="built_in">new</span>(UserResponse)</span><br><span class="line">    err := grpc.Invoke(ctx, <span class="string">"/User/QueryUser"</span>, in, out, c.cc, opts...)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> out, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Invoke</span><span class="params">(ctx context.Context, method <span class="keyword">string</span>, args, reply <span class="keyword">interface</span>&#123;&#125;, </span></span></span><br><span class="line"><span class="function"><span class="params">    cc *ClientConn, opts ...CallOption)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> cc.dopts.unaryInt != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> invoke(ctx, method, args, reply, cc, opts...)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>UnaryClientInterceptor也是一个func类型，其返回值和invoke的返回值相同，这是opentracing实现的interceptor，通常在客户端拦截器在执行invoker的前后会加入拦截器自己的逻辑。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> UnaryClientInterceptor <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, method <span class="keyword">string</span>, req, </span></span></span><br><span class="line"><span class="function"><span class="params">     reply <span class="keyword">interface</span>&#123;&#125;, cc *ClientConn, invoker UnaryInvoker, </span></span></span><br><span class="line"><span class="function"><span class="params">     opts ...CallOption)</span> <span class="title">error</span></span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">UnaryClientInterceptor</span><span class="params">(opts ...Option)</span> <span class="title">grpc</span>.<span class="title">UnaryClientInterceptor</span></span> &#123;</span><br><span class="line">    o := evaluateOptions(opts)</span><br><span class="line">    <span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(parentCtx context.Context, method <span class="keyword">string</span>, req, </span></span></span><br><span class="line"><span class="function"><span class="params">    reply <span class="keyword">interface</span>&#123;&#125;, cc *grpc.ClientConn, invoker grpc.UnaryInvoker,</span></span></span><br><span class="line"><span class="function"><span class="params">    opts ...grpc.CallOption)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        newCtx, clientSpan := newClientSpanFromContext(parentCtx, o.tracer, method)</span><br><span class="line">        err := invoker(newCtx, method, req, reply, cc, opts...)</span><br><span class="line">        finishClientSpan(clientSpan, err)</span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="chain"><a href="#chain" class="headerlink" title="chain"></a>chain</h3><p>因为gRPC提供的接口只支持一个拦截器，但通常希望按一定顺序去执行多个拦截器。于是 <a href="https://github.com/grpc-ecosystem/go-grpc-middleware" target="_blank" rel="noopener">go-grpc-middleware</a>这个项目提供了<code>grpc_middleware.ChainUnaryServer</code>方法来实现链式处理。以Server为例，Chain集合了所有拦截器，当数量大于1的时候，从<code>interceptors[0]</code>开始递归，每个转入<code>interceptors[i]</code>的handler都是经过后续拦截器包装的chainHandler。curI作为闭包的参数，跟随递归过程自加，依次调用chainHandler中的<code>interceptor[curI]</code>，直到最后一个调用真正的handler。<strong>之后返回curlI自减，保证依次反向执行interceptors在handler之后要执行的操作。</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">ChainUnaryServer</span><span class="params">(interceptors ...grpc.UnaryServerInterceptor)</span> <span class="title">grpc</span>.<span class="title">UnaryServerInterceptor</span></span> &#123;</span><br><span class="line">    n := <span class="built_in">len</span>(interceptors)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> n &gt; <span class="number">1</span> &#123;</span><br><span class="line">        lastI := n - <span class="number">1</span></span><br><span class="line">        <span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">            <span class="keyword">var</span> (</span><br><span class="line">                chainHandler grpc.UnaryHandler</span><br><span class="line">                curI         <span class="keyword">int</span></span><br><span class="line">            )</span><br><span class="line">            chainHandler = <span class="function"><span class="keyword">func</span><span class="params">(currentCtx context.Context, currentReq <span class="keyword">interface</span>&#123;&#125;)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">                <span class="keyword">if</span> curI == lastI &#123;</span><br><span class="line">                    <span class="keyword">return</span> handler(currentCtx, currentReq)</span><br><span class="line">                &#125;</span><br><span class="line">                curI++</span><br><span class="line">                resp, err := interceptors[curI](currentCtx, currentReq, info, chainHandler)</span><br><span class="line">                curI--</span><br><span class="line">                <span class="keyword">return</span> resp, err</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> interceptors[<span class="number">0</span>](ctx, req, info, chainHandler)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> n == <span class="number">1</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> interceptors[<span class="number">0</span>]</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// n == 0; Dummy interceptor maintained for backward compatibility to avoid returning nil.</span></span><br><span class="line">    <span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">        <span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="service-center-chain"><a href="#service-center-chain" class="headerlink" title="service-center chain"></a>service-center chain</h2><blockquote>
+<p>service-center里有单独的interceptor，是用来处理routing前的准入控制，chain提供的handler是用来做路由后的处理。下面的代码来自<code>roa.GetRouter().ServeHTTP(w, r)</code>。</p>
+</blockquote>
+<p>服务中心的是服务端的处理链，invocation通过NewChain来初始化，将注册的handler加入其中。在每个handler里通过操作context来处理请求和响应。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">inv := chain.NewInvocation(ctx, chain.NewChain(SERVER_CHAIN_NAME, hs))</span><br><span class="line">inv.WithContext(CTX_RESPONSE, w).</span><br><span class="line">    WithContext(CTX_REQUEST, r).</span><br><span class="line">    WithContext(CTX_MATCH_PATTERN, ph.Path).</span><br><span class="line">    WithContext(CTX_MATCH_FUNC, ph.Name)</span><br><span class="line">inv.Next(chain.WithFunc(<span class="function"><span class="keyword">func</span><span class="params">(ret chain.Result)</span></span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        err := ret.Err</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            http.Error(w, err.Error(), http.StatusBadRequest)</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="keyword">if</span> ret.OK &#123;</span><br><span class="line">        ph.ServeHTTP(w, r)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;))</span><br></pre></td></tr></table></figure>
+
+<h3 id="chain-1"><a href="#chain-1" class="headerlink" title="chain"></a>chain</h3><p>invocation中的chain跟go-chassis中实现类似，Next方法（<code>syncNext</code>）依次调用注册的Handler。当chain里的handler都处理完成后调用<code>i.Success</code>开始Callback。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Chain <span class="keyword">struct</span> &#123;</span><br><span class="line">    name         <span class="keyword">string</span></span><br><span class="line">    handlers     []Handler</span><br><span class="line">    currentIndex <span class="keyword">int</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Chain)</span> <span class="title">syncNext</span><span class="params">(i *Invocation)</span></span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        itf := <span class="built_in">recover</span>()</span><br><span class="line">        <span class="keyword">if</span> itf == <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">        util.LogPanic(itf)</span><br><span class="line">        i.Fail(errorsEx.RaiseError(itf))</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="comment">// handler已遍历完成</span></span><br><span class="line">    <span class="keyword">if</span> c.currentIndex &gt;= <span class="built_in">len</span>(c.handlers)<span class="number">-1</span> &#123;</span><br><span class="line">        i.Success()</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    c.currentIndex += <span class="number">1</span></span><br><span class="line">    c.handlers[c.currentIndex].Handle(i)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>以下是一个metricHandler的实现，它只是调用<code>invocation.Next</code>并且通过<code>WithAsyncFunc</code>实现这个异步函数的注册。其中w r等参数以闭包的形式（地址）与func一起注册到invocation中。其实在i.Next之前的内容是在server端业务逻辑之前执行的内容，其他的Handler比如authHandler就只有前面部分，而没有callback注册。还有一些callback需要原始参数，可以在handle里先计算并以闭包的形式传递。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> MetricsHandler <span class="keyword">struct</span> &#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *MetricsHandler)</span> <span class="title">Handle</span><span class="params">(i *chain.Invocation)</span></span> &#123;</span><br><span class="line">    w, r := i.Context().Value(rest.CTX_RESPONSE).(http.ResponseWriter),</span><br><span class="line">        i.Context().Value(rest.CTX_REQUEST).(*http.Request)</span><br><span class="line">    i.Next(chain.WithAsyncFunc(<span class="function"><span class="keyword">func</span><span class="params">(ret chain.Result)</span></span> &#123;</span><br><span class="line">        start, ok := i.Context().Value(svr.CTX_START_TIMESTAMP).(time.Time)</span><br><span class="line">        <span class="keyword">if</span> !ok &#123;</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">        svr.ReportRequestCompleted(w, r, start)</span><br><span class="line">        util.LogNilOrWarnf(start, <span class="string">"%s %s"</span>, r.Method, r.RequestURI)</span><br><span class="line">    &#125;))</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">RegisterHandlers</span><span class="params">()</span></span> &#123;</span><br><span class="line">    chain.RegisterHandler(rest.SERVER_CHAIN_NAME, &amp;MetricsHandler&#123;&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="invoation"><a href="#invoation" class="headerlink" title="invoation"></a>invoation</h3><p>invocation的处理链数据结构包含Callback，其中Calback以匿名组合的方式包含回调Func和Aysnc是否异步的flag。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Invocation <span class="keyword">struct</span> &#123;</span><br><span class="line">    Callback</span><br><span class="line">    context *util.StringContext</span><br><span class="line">    chain   Chain</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> Callback <span class="keyword">struct</span> &#123;</span><br><span class="line">    Func  <span class="function"><span class="keyword">func</span><span class="params">(r Result)</span></span></span><br><span class="line"><span class="function">    <span class="title">Async</span> <span class="title">bool</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>invocation通过WithFunc这种函数式参数的方式，每个Handler中通过<code>WithAsyncFunc</code>通过<code>setCallback</code>注册到了invocation的Callback中。在chain的Next中不断地在回调函数<code>i.Func</code>中添加各handler的AsyncFunc。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(i *Invocation)</span> <span class="title">Next</span><span class="params">(opts ...InvocationOption)</span></span> &#123;</span><br><span class="line">    <span class="keyword">var</span> op InvocationOp</span><br><span class="line">    <span class="keyword">for</span> _, opt := <span class="keyword">range</span> opts &#123;</span><br><span class="line">        op = opt(op)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 注册每个handler的回调函数</span></span><br><span class="line">    i.setCallback(op.Func, op.Async)</span><br><span class="line">    i.chain.Next(i)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(i *Invocation)</span> <span class="title">setCallback</span><span class="params">(f <span class="keyword">func</span>(r Result)</span>, <span class="title">async</span> <span class="title">bool</span>)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> f == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> i.Func == <span class="literal">nil</span> &#123;</span><br><span class="line">        i.Func = f</span><br><span class="line">        i.Async = async</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 回调函数以注册的次序写在Callback的Func中</span></span><br><span class="line">    cb := i.Func</span><br><span class="line">    i.Func = <span class="function"><span class="keyword">func</span><span class="params">(r Result)</span></span> &#123;</span><br><span class="line">        cb(r)</span><br><span class="line">        callback(f, async, r)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">callback</span><span class="params">(f <span class="keyword">func</span>(r Result)</span>, <span class="title">async</span> <span class="title">bool</span>, <span class="title">r</span> <span class="title">Result</span>)</span> &#123;</span><br><span class="line">    c := Callback&#123;Func: f, Async: async&#125;</span><br><span class="line">    c.Invoke(r)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="callback"><a href="#callback" class="headerlink" title="callback"></a>callback</h3><p>当最后一个chain成功后开始i.Success，也就是通过<code>cb.Invoke</code>开始回调。cb中的callback首先是ph.ServeHTTP(w, r)，之后是handler注册的aysncFunc或syncFunc，如果是sync的则同步调用，如果异步则通过new一个goroutine来执行。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(cb *Callback)</span> <span class="title">Success</span><span class="params">(args ...<span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    cb.Invoke(Result&#123;</span><br><span class="line">        OK:   <span class="literal">true</span>,</span><br><span class="line">        Args: args,</span><br><span class="line">    &#125;)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(cb *Callback)</span> <span class="title">Invoke</span><span class="params">(r Result)</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> cb.Async &#123;</span><br><span class="line">        <span class="keyword">go</span> syncInvoke(cb.Func, r)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    syncInvoke(cb.Func, r)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">syncInvoke</span><span class="params">(f <span class="keyword">func</span>(r Result)</span>, <span class="title">r</span> <span class="title">Result</span>)</span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">if</span> itf := <span class="built_in">recover</span>(); itf != <span class="literal">nil</span> &#123;</span><br><span class="line">            util.LogPanic(itf)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="keyword">if</span> f == <span class="literal">nil</span> &#123;</span><br><span class="line">        util.Logger().Errorf(<span class="literal">nil</span>, <span class="string">"Callback function is nil. result: %s,"</span>, r)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    f(r)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="go-chassis-chain"><a href="#go-chassis-chain" class="headerlink" title="go-chassis chain"></a>go-chassis chain</h2><p><a href="https://github.com/ServiceComb/go-chassis" target="_blank" rel="noopener">go-chassis</a>支持RESTful和RPC两种通信机制，对他们的客户端和服务端的调用实现了通用的处理链，支持配置和扩展。客户端的handlerChain里最后一个是transport，用来实现最后请求的invoke。</p>
+<blockquote>
+<p>go-chassis里没有在业务逻辑之后添加handler的实例，但是跟service-center实现类似可以在chain.Next中添加回调逻辑，将可以在业务之后按照反序进行回调。</p>
+</blockquote>
+<h3 id="client-1"><a href="#client-1" class="headerlink" title="client"></a>client</h3><p>go-chassis中实现的HandlerChain支持RESTful/RPC的客户端服务端。其中客户端的RPC和RESTful方式相同，从handler包的ChainMap中获取注册的chain</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ri *RestInvoker)</span> <span class="title">ContextDo</span><span class="params">(ctx context.Context, req *rest.Request,</span></span></span><br><span class="line"><span class="function"><span class="params">    options ...InvocationOption)</span> <span class="params">(*rest.Response, error)</span></span> &#123;</span><br><span class="line">    inv := invocation.CreateInvocation()</span><br><span class="line">    <span class="comment">// create invoation with req and options</span></span><br><span class="line">    c, _ := handler.GetChain(common.Consumer, ri.opts.ChainName)</span><br><span class="line">    c.Next(inv, <span class="function"><span class="keyword">func</span><span class="params">(ir *invocation.InvocationResponse)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        err = ir.Err</span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;)</span><br><span class="line">    <span class="keyword">return</span> resp, err</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ri *RPCInvoker)</span> <span class="title">Invoke</span><span class="params">(ctx context.Context, microServiceName, schemaID, </span></span></span><br><span class="line"><span class="function"><span class="params">    operationID <span class="keyword">string</span>, arg <span class="keyword">interface</span>&#123;&#125;, reply <span class="keyword">interface</span>&#123;&#125;, </span></span></span><br><span class="line"><span class="function"><span class="params">    options ...InvocationOption)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    i := invocation.CreateInvocation()</span><br><span class="line">    <span class="comment">// create invoation with arg reply and options</span></span><br><span class="line">    c, _ := handler.GetChain(common.Consumer, ri.opts.ChainName)</span><br><span class="line">    c.Next(i, <span class="function"><span class="keyword">func</span><span class="params">(ir *invocation.InvocationResponse)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        err = ir.Err</span><br><span class="line">        reply = ir.Result</span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;)</span><br><span class="line">    <span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="server-1"><a href="#server-1" class="headerlink" title="server"></a>server</h3><p>以下是RESTful版本的server端处理，RPC版本的类似，这个server端的处理只支持在serve之前添加处理模块，而不能在这之后。这里可以对比一下<a href="https://github.com/ServiceComb/service-center" target="_blank" rel="noopener">service-center</a>的实现，见下一节。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">handle := <span class="function"><span class="keyword">func</span><span class="params">(req *restful.Request, rep *restful.Response)</span></span> &#123;</span><br><span class="line">    c, err := handler.GetChain(common.Provider, r.opts.ChainName)</span><br><span class="line">    <span class="comment">//todo: use it for hystric</span></span><br><span class="line">    inv := invocation.Invocation&#123;</span><br><span class="line">        MicroServiceName:   r.microServiceName,</span><br><span class="line">        SourceMicroService: req.HeaderParameter(common.HeaderSourceName),</span><br><span class="line">        Args:               req,</span><br><span class="line">        Protocol:           common.ProtocolRest,</span><br><span class="line">        SchemaID:           schemaName,</span><br><span class="line">        OperationID:        method.Name,</span><br><span class="line">    &#125;</span><br><span class="line">    bs := NewBaseServer(context.TODO())</span><br><span class="line">    bs.req = req</span><br><span class="line">    bs.resp = rep</span><br><span class="line">    c.Next(&amp;inv, <span class="function"><span class="keyword">func</span><span class="params">(ir *invocation.InvocationResponse)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        <span class="keyword">if</span> ir.Err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> ir.Err</span><br><span class="line">        &#125;</span><br><span class="line">        method.Func.Call([]reflect.Value&#123;schemaValue, reflect.ValueOf(bs)&#125;)</span><br><span class="line">        <span class="keyword">if</span> bs.resp.StatusCode() &gt;= http.StatusBadRequest &#123;</span><br><span class="line">            <span class="keyword">return</span> fmt.Errorf(<span class="string">"get err from http handle"</span>, bs.resp.StatusCode())</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="chain-2"><a href="#chain-2" class="headerlink" title="chain"></a>chain</h3><p>handlerChain是通过文件配置的方式定义的，并在初始化的时候根据处理链类型（provider or consumer）和处理链名称newChain并完成注册。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Chain <span class="keyword">struct</span> &#123;</span><br><span class="line">    ServiceType  <span class="keyword">string</span></span><br><span class="line">    Name         <span class="keyword">string</span></span><br><span class="line">    Handlers     []Handler</span><br><span class="line">    HandlerIndex <span class="keyword">int</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>每个handler实现Handle和Name两个方法，然后在每个Handler末尾继续调用chain.Next，并将callback递归下去，直到最后一个Handler。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Handler <span class="keyword">interface</span> &#123;</span><br><span class="line">    Handle(*Chain, *invocation.Invocation, invocation.ResponseCallBack)</span><br><span class="line">    Name() <span class="keyword">string</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Chain)</span> <span class="title">Next</span><span class="params">(i *invocation.Invocation, f invocation.ResponseCallBack)</span></span> &#123;</span><br><span class="line">    index := c.HandlerIndex</span><br><span class="line">    <span class="keyword">if</span> index &gt;= <span class="built_in">len</span>(c.Handlers) &#123;</span><br><span class="line">        r := &amp;invocation.InvocationResponse&#123;</span><br><span class="line">            Err: <span class="literal">nil</span>,</span><br><span class="line">        &#125;</span><br><span class="line">        f(r)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    c.HandlerIndex++</span><br><span class="line">    c.Handlers[index].Handle(c, i, f)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>以下是一个fault-inject的例子，出错后开始回调callback，并将出错handler中的invocatoinResponse通过回调回到invoke中的callback函数，将错误信息error传递到invoke中的err。在Handle过程中，根据需要操作inv的内容，invocation结构体包含了所有server和client通信的相关数据。handler主要可以修改里面的请求Args和响应Reply。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">init</span><span class="params">()</span></span> &#123; RegisterHandler(FaultHandlerName, FaultHandle) &#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rl *FaultHandler)</span> <span class="title">Name</span><span class="params">()</span> <span class="title">string</span></span> &#123; <span class="keyword">return</span> <span class="string">"fault-inject"</span> &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rl *FaultHandler)</span> <span class="title">Handle</span><span class="params">(chain *Chain, inv *invocation.Invocation,</span></span></span><br><span class="line"><span class="function"><span class="params">     cb invocation.ResponseCallBack)</span></span> &#123;</span><br><span class="line">    <span class="comment">// fault handler do something...</span></span><br><span class="line">    r := &amp;invocation.InvocationResponse&#123;&#125;</span><br><span class="line">    err := faultInject(faultValue, inv)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        r.Err = err</span><br><span class="line">        cb(r)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    chain.Next(inv, <span class="function"><span class="keyword">func</span><span class="params">(r *invocation.InvocationResponse)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">        <span class="keyword">return</span> cb(r)</span><br><span class="line">    &#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/micro-service/" rel="tag"># micro-service</a>
+          
+            <a href="/tags/RPC/" rel="tag"># RPC</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/11/12/grpc-loadbalance/" rel="next" title="gRPC负载均衡浅析">
+                <i class="fa fa-chevron-left"></i> gRPC负载均衡浅析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/11/21/how-to-sort/" rel="prev" title="Sort排序总结">
+                Sort排序总结 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/nino.jpg" alt="nino">
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <div class="site-description motion-element" itemprop="description"></div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">26</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">10</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/ninokop" title="GitHub &rarr; https://github.com/ninokop" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://weibo.com/u/1732126300" title="Weibo &rarr; https://weibo.com/u/1732126300" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#gRPC-Interceptor"><span class="nav-number">1.</span> <span class="nav-text">gRPC Interceptor</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#server"><span class="nav-number">1.1.</span> <span class="nav-text">server</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#client"><span class="nav-number">1.2.</span> <span class="nav-text">client</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#chain"><span class="nav-number">1.3.</span> <span class="nav-text">chain</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#service-center-chain"><span class="nav-number">2.</span> <span class="nav-text">service-center chain</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#chain-1"><span class="nav-number">2.1.</span> <span class="nav-text">chain</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#invoation"><span class="nav-number">2.2.</span> <span class="nav-text">invoation</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#callback"><span class="nav-number">2.3.</span> <span class="nav-text">callback</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#go-chassis-chain"><span class="nav-number">3.</span> <span class="nav-text">go-chassis chain</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#client-1"><span class="nav-number">3.1.</span> <span class="nav-text">client</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#server-1"><span class="nav-number">3.2.</span> <span class="nav-text">server</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#chain-2"><span class="nav-number">3.3.</span> <span class="nav-text">chain</span></a></li></ol></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

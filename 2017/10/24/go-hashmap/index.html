@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="想了解Go内置类型的内存布局的契机，是一次在调试“不同类型的小对象频繁创建对gc性能的影响”时发现map的gc性能不佳，而作为对比的包含slice的struct却很好。这里总结Go runtime里map的实现，可以解释这个问题。 hash table内部结构Go的map就是hashmap，源码在src/runtime/hashmap.go。对比C++用红黑树实现的map，Go的map是unord">
+<meta name="keywords" content="Golang">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Go Hashmap内存布局和实现">
+<meta property="og:url" content="http://yoursite.com/2017/10/24/go-hashmap/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="想了解Go内置类型的内存布局的契机，是一次在调试“不同类型的小对象频繁创建对gc性能的影响”时发现map的gc性能不佳，而作为对比的包含slice的struct却很好。这里总结Go runtime里map的实现，可以解释这个问题。 hash table内部结构Go的map就是hashmap，源码在src/runtime/hashmap.go。对比C++用红黑树实现的map，Go的map是unord">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2017/10/24/go-hashmap/Go-Hashmap内存布局和实现/hashmap.png">
+<meta property="og:updated_time" content="2019-05-26T10:32:16.650Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Go Hashmap内存布局和实现">
+<meta name="twitter:description" content="想了解Go内置类型的内存布局的契机，是一次在调试“不同类型的小对象频繁创建对gc性能的影响”时发现map的gc性能不佳，而作为对比的包含slice的struct却很好。这里总结Go runtime里map的实现，可以解释这个问题。 hash table内部结构Go的map就是hashmap，源码在src/runtime/hashmap.go。对比C++用红黑树实现的map，Go的map是unord">
+<meta name="twitter:image" content="http://yoursite.com/2017/10/24/go-hashmap/Go-Hashmap内存布局和实现/hashmap.png">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2017/10/24/go-hashmap/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>Go Hashmap内存布局和实现 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/10/24/go-hashmap/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Go Hashmap内存布局和实现
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2017-10-24 00:11:34" itemprop="dateCreated datePublished" datetime="2017-10-24T00:11:34+08:00">2017-10-24</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-26 18:32:16" itemprop="dateModified" datetime="2019-05-26T18:32:16+08:00">2019-05-26</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/Golang/" itemprop="url" rel="index"><span itemprop="name">Golang</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>想了解Go内置类型的内存布局的契机，是一次在调试“不同类型的小对象频繁创建对gc性能的影响”时发现map的gc性能不佳，而作为对比的包含slice的struct却很好。这里总结Go runtime里map的实现，可以解释这个问题。</p>
+<h2 id="hash-table内部结构"><a href="#hash-table内部结构" class="headerlink" title="hash table内部结构"></a>hash table内部结构</h2><p>Go的map就是hashmap，源码在src/runtime/hashmap.go。对比C++用红黑树实现的map，Go的map是unordered map，即无法对key值排序遍历。跟传统的hashmap的实现方法一样，它通过一个buckets数组实现，所有元素被hash到数组的bucket中，<strong>buckets</strong>就是指向了这个内存连续分配的数组。<strong>B</strong>字段说明hash表大小是2的指数，即<code>2^B</code>。每次扩容会增加到上次大小的两倍，即<code>2^(B+1)</code>。当bucket填满后，将通过<strong>overflow</strong>指针来<code>mallocgc</code>一个bucket出来形成链表，也就是为哈希表解决冲突问题。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// A header for a Go map.</span></span><br><span class="line"><span class="keyword">type</span> hmap <span class="keyword">struct</span> &#123;</span><br><span class="line">	count <span class="keyword">int</span> <span class="comment">// len()返回的map的大小 即有多少kv对</span></span><br><span class="line">	flags <span class="keyword">uint8</span></span><br><span class="line">	B     <span class="keyword">uint8</span>  <span class="comment">// 表示hash table总共有2^B个buckets </span></span><br><span class="line">	hash0 <span class="keyword">uint32</span> <span class="comment">// hash seed</span></span><br><span class="line"></span><br><span class="line">	buckets    unsafe.Pointer <span class="comment">// 按照low hash值可查找的连续分配的数组，初始时为16个Buckets.</span></span><br><span class="line">	oldbuckets unsafe.Pointer </span><br><span class="line">	nevacuate  <span class="keyword">uintptr</span>      </span><br><span class="line"></span><br><span class="line">	overflow *[<span class="number">2</span>]*[]*bmap <span class="comment">//溢出链 当初始buckets都满了之后会使用overflow</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// A bucket for a Go map.</span></span><br><span class="line"><span class="keyword">type</span> bmap <span class="keyword">struct</span> &#123;</span><br><span class="line">	tophash [bucketCnt]<span class="keyword">uint8</span></span><br><span class="line">	<span class="comment">// Followed by bucketCnt keys and then bucketCnt values.</span></span><br><span class="line">	<span class="comment">// <span class="doctag">NOTE:</span> packing all the keys together and then all the values together makes the</span></span><br><span class="line">	<span class="comment">// code a bit more complicated than alternating key/value/key/value/... but it allows</span></span><br><span class="line">	<span class="comment">// us to eliminate padding which would be needed for, e.g., map[int64]int8.</span></span><br><span class="line">	<span class="comment">// Followed by an overflow pointer.</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上图是一个bucket的数据结构，tophash是个大小为8(bucketCnt)的数组，存储了8个key的hash值的高八位值，在对key/value对增删查的时候，先比较key的hash值高八位是否相等，然后再比较具体的key值。根据官方注释在tophash数组之后跟着8个key/value对，每一对都对应tophash当中的一条记录。最后bucket中还包含指向链表下一个bucket的指针。内存布局如下图。</p>
+<img src="/2017/10/24/go-hashmap/Go-Hashmap内存布局和实现/hashmap.png" style="zoom:40%">
+
+<blockquote>
+<p>之所以把所有k1k2放一起而不是k1v1是因为key和value的数据类型内存大小可能差距很大，比如map[int64]int8，考虑到字节对齐，kv存在一起会浪费很多空间。</p>
+</blockquote>
+<h2 id="map相关操作"><a href="#map相关操作" class="headerlink" title="map相关操作"></a>map相关操作</h2><h3 id="map初始化"><a href="#map初始化" class="headerlink" title="map初始化"></a>map初始化</h3><p>B的初始大小是0，若指定了map的大小hint且hint大于8，那么buckets会在make时就通过newarray分配好，否则buckets会在第一次put的时候分配。随着hashmap中key/value对的增多，buckets需要重新分配，每一次都要<strong>重新hash并进行元素拷贝</strong>。所以最好在初始化时就给map指定一个合适的大小。</p>
+<blockquote>
+<p>makemap有h和bucket这两个参数，是留给编译器的。如果编译器决定hmap结构体和第一个bucket可以在栈上创建，这两个入参可能不是nil的。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// makemap implemments a Go map creation make(map[k]v, hint)</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">makemap</span><span class="params">(t *maptype, hint <span class="keyword">int64</span>, h *hmap, bucket unsafe.Pointer)</span> *<span class="title">hmap</span></span>&#123;</span><br><span class="line">  B := <span class="keyword">uint8</span>(<span class="number">0</span>)</span><br><span class="line">  <span class="keyword">for</span> ; hint &gt; bucketCnt &amp;&amp; <span class="keyword">float32</span>(hint) &gt; loadFactor*<span class="keyword">float32</span>(<span class="keyword">uintptr</span>(<span class="number">1</span>)&lt;&lt;B); B++ &#123;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 确定初始B的初始值 这里hint是指kv对的数目 而每个buckets中可以保存8个kv对</span></span><br><span class="line">  <span class="comment">// 因此上式是要找到满足不等式 hint &gt; loadFactor*(2^B) 最小的B</span></span><br><span class="line">  <span class="keyword">if</span> B != <span class="number">0</span> &#123;</span><br><span class="line">    buckets = newarray(t.bucket, <span class="keyword">uintptr</span>(<span class="number">1</span>)&lt;&lt;B)</span><br><span class="line">  &#125;</span><br><span class="line">  h = (*hmap)(newobject(t.hmap))</span><br><span class="line">  <span class="keyword">return</span> h</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="map存值"><a href="#map存值" class="headerlink" title="map存值"></a>map存值</h3><p>存储的步骤和第一部分的分析一致。首先用key的hash值低8位找到bucket，然后在bucket内部比对tophash和高8位与其对应的key值与入参key是否相等，若找到则更新这个值。若key不存在，则key优先存入在查找的过程中遇到的空的tophash数组位置。若当前的bucket已满则需要另外分配空间给这个key，新分配的bucket将挂在overflow链表后。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">mapassign1</span><span class="params">(t *maptype, h *hmap, key unsafe.Pointer, val unsafe.Pointer)</span></span> &#123;</span><br><span class="line">  hash := alg.hash(key, <span class="keyword">uintptr</span>(h.hash0))</span><br><span class="line">  <span class="keyword">if</span> h.buckets == <span class="literal">nil</span> &#123;</span><br><span class="line">    h.buckets = newarray(t.bucket, <span class="number">1</span>)</span><br><span class="line">  &#125;</span><br><span class="line">again:</span><br><span class="line">  <span class="comment">//根据低8位hash值找到对应的buckets</span></span><br><span class="line">  bucket := hash &amp; (<span class="keyword">uintptr</span>(<span class="number">1</span>)&lt;&lt;h.B - <span class="number">1</span>)</span><br><span class="line">  b := (bmap)(unsafe.Pointer(<span class="keyword">uintptr</span>(h.buckets) + bucketuintptr(t.bucketsize)))</span><br><span class="line">  <span class="comment">//计算hash值的高8位</span></span><br><span class="line">  top := <span class="keyword">uint8</span>(hash &gt;&gt; (sys.PtrSize*<span class="number">8</span> - <span class="number">8</span>))</span><br><span class="line">  <span class="keyword">for</span> &#123;</span><br><span class="line">    <span class="comment">//遍历每一个bucket 对比所有tophash是否与top相等</span></span><br><span class="line">    <span class="comment">//若找到空tophash位置则标记为可插入位置</span></span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">uintptr</span>(<span class="number">0</span>); i &lt; bucketCnt; i++ &#123;</span><br><span class="line">      <span class="keyword">if</span> b.tophash[i] != top &#123;</span><br><span class="line">        <span class="keyword">if</span> b.tophash[i] == empty &amp;&amp; inserti == <span class="literal">nil</span> &#123;</span><br><span class="line">          inserti = &amp;b.tophash[i]</span><br><span class="line">        &#125; </span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">      &#125;</span><br><span class="line">      <span class="comment">//当前tophash对应的key位置可以根据bucket的偏移量找到</span></span><br><span class="line">      k2 := add(unsafe.Pointer(b), dataOffset+i*<span class="keyword">uintptr</span>(t.keysize))</span><br><span class="line">      <span class="keyword">if</span> !alg.equal(key, k2) &#123;</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">      &#125;</span><br><span class="line">      <span class="comment">//找到符合tophash对应的key位置</span></span><br><span class="line">      typedmemmove(t.elem, v2, val)</span><br><span class="line">      <span class="keyword">goto</span> done</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//若overflow为空则break</span></span><br><span class="line">    ovf := b.overflow(t)</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// did not find mapping for key.  Allocate new cell &amp; add entry.</span></span><br><span class="line">  <span class="keyword">if</span> <span class="keyword">float32</span>(h.count) &gt;= loadFactor*<span class="keyword">float32</span>((<span class="keyword">uintptr</span>(<span class="number">1</span>)&lt;&lt;h.B)) &amp;&amp; h.count &gt;= bucketCnt &#123;</span><br><span class="line">    hashGrow(t, h)</span><br><span class="line">    <span class="keyword">goto</span> again <span class="comment">// Growing the table invalidates everything, so try again</span></span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// all current buckets are full, allocate a new one.</span></span><br><span class="line">  <span class="keyword">if</span> inserti == <span class="literal">nil</span> &#123;</span><br><span class="line">    newb := (*bmap)(newobject(t.bucket))</span><br><span class="line">    h.setoverflow(t, b, newb)</span><br><span class="line">    inserti = &amp;newb.tophash[<span class="number">0</span>]</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// store new key/value at insert position</span></span><br><span class="line">  kmem := newobject(t.key)</span><br><span class="line">  vmem := newobject(t.elem)</span><br><span class="line">  typedmemmove(t.key, insertk, key) </span><br><span class="line">  typedmemmove(t.elem, insertv, val)</span><br><span class="line">  *inserti = top</span><br><span class="line">  h.count++</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="hash-Grow扩容和迁移"><a href="#hash-Grow扩容和迁移" class="headerlink" title="hash Grow扩容和迁移"></a>hash Grow扩容和迁移</h2><p>在往map中存值时若所有的bucket已满，需要在堆中new新的空间时需要计算是否需要扩容。扩容的时机是count &gt; loadFactor(2^B)。这里的loadfactor选择为6.5。<strong>扩容时机的物理意义的理解</strong> 在没有溢出时hashmap总共可以存储8(2^B)个KV对，当hashmap已经存储到6.5(2^B)个KV对时表示hashmap已经趋于溢出，即很有可能在存值时用到overflow链表，这样会增加hitprobe和missprobe。为了使hashmap保持读取和超找的高性能，在hashmap快满时需要在新分配的bucket中重新hash元素并拷贝，源码中称之为evacuate。</p>
+<blockquote>
+<p>overflow溢出率是指平均一个bucket有多少个kv的时候会溢出。bytes/entry是指平均存一个kv需要额外存储多少字节的数据。hitprobe是指找到一个存在的key平均需要找多少次。missprobe是指找到一个不存在的key平均需要找多少次。选取6.5是为了平衡这组数据。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th align="center">loadFactor</th>
+<th align="center">%overflow</th>
+<th align="center">bytes/entry</th>
+<th align="center">hitprobe</th>
+<th align="center">missprobe</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">4.00</td>
+<td align="center">2.13</td>
+<td align="center">20.77</td>
+<td align="center">3.00</td>
+<td align="center">4.00</td>
+</tr>
+<tr>
+<td align="center">4.50</td>
+<td align="center">4.05</td>
+<td align="center">17.30</td>
+<td align="center">3.25</td>
+<td align="center">4.50</td>
+</tr>
+<tr>
+<td align="center">5.00</td>
+<td align="center">6.85</td>
+<td align="center">14.77</td>
+<td align="center">3.50</td>
+<td align="center">5.00</td>
+</tr>
+<tr>
+<td align="center">5.50</td>
+<td align="center">10.55</td>
+<td align="center">12.94</td>
+<td align="center">3.75</td>
+<td align="center">5.50</td>
+</tr>
+<tr>
+<td align="center">6.00</td>
+<td align="center">15.27</td>
+<td align="center">11.67</td>
+<td align="center">4.00</td>
+<td align="center">6.00</td>
+</tr>
+<tr>
+<td align="center">6.50</td>
+<td align="center">20.90</td>
+<td align="center">10.79</td>
+<td align="center">4.25</td>
+<td align="center">6.50</td>
+</tr>
+<tr>
+<td align="center">7.00</td>
+<td align="center">27.14</td>
+<td align="center">10.15</td>
+<td align="center">4.50</td>
+<td align="center">7.00</td>
+</tr>
+<tr>
+<td align="center">7.50</td>
+<td align="center">34.03</td>
+<td align="center">9.73</td>
+<td align="center">4.75</td>
+<td align="center">7.50</td>
+</tr>
+<tr>
+<td align="center">8.00</td>
+<td align="center">41.10</td>
+<td align="center">9.40</td>
+<td align="center">5.00</td>
+<td align="center">8.00</td>
+</tr>
+</tbody></table>
+<p>但这个迁移并没有在扩容之后一次性完成，而是逐步完成的，每一次insert或remove时迁移1到2个pair，即增量扩容。<a href>增量扩容的原因</a> 主要是缩短map容器的响应时间。若hashmap很大扩容时很容易导致系统停顿无响应。增量扩容本质上就是将总的扩容时间分摊到了每一次hash操作上。由于这个工作是逐渐完成的，导致数据一部分在old table中一部分在new table中。old的bucket不会删除，只是加上一个已删除的标记。只有当所有的bucket都从old table里迁移后才会将其释放掉。</p>
+<h2 id="hasmap的删除"><a href="#hasmap的删除" class="headerlink" title="hasmap的删除"></a>hasmap的删除</h2><p>map 不会收缩 “不再使用” 的空间。就算把所有键值删除，它依然保留内存空间以待后用。如果一个非常大的map里面的元素很少的话，可以考虑新建一个map将老的map元素手动复制到新的map中。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">mapdelete</span><span class="params">(t *maptype, h *hmap, key unsafe.Pointer)</span></span> &#123;</span><br><span class="line">    <span class="comment">// 找到之后分别释放key和value的内存</span></span><br><span class="line">    <span class="keyword">if</span> t.indirectkey &#123;</span><br><span class="line">        *(*unsafe.Pointer)(k) = <span class="literal">nil</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        typedmemclr(t.key, k)</span><br><span class="line">    &#125;</span><br><span class="line">    v := unsafe.Pointer(<span class="keyword">uintptr</span>(unsafe.Pointer(b)) + dataOffset + bucketCnt*<span class="keyword">uintptr</span>(t.keysize) + i*<span class="keyword">uintptr</span>(t.valuesize))</span><br><span class="line">    <span class="keyword">if</span> t.indirectvalue &#123;</span><br><span class="line">        *(*unsafe.Pointer)(v) = <span class="literal">nil</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        typedmemclr(t.elem, v)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 把对应的tophash里面的置为空</span></span><br><span class="line">    b.tophash[i] = empty</span><br><span class="line">    h.count--</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Golang/" rel="tag"># Golang</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/08/25/init-hexo-blog/" rel="next" title="Hexo博客搭建与github托管">
+                <i class="fa fa-chevron-left"></i> Hexo博客搭建与github托管
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/10/25/go-slice-string/" rel="prev" title="Go Slice与String内存布局和实现">
+                Go Slice与String内存布局和实现 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/nino.jpg" alt="nino">
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <div class="site-description motion-element" itemprop="description"></div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">26</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">10</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/ninokop" title="GitHub &rarr; https://github.com/ninokop" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://weibo.com/u/1732126300" title="Weibo &rarr; https://weibo.com/u/1732126300" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#hash-table内部结构"><span class="nav-number">1.</span> <span class="nav-text">hash table内部结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#map相关操作"><span class="nav-number">2.</span> <span class="nav-text">map相关操作</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#map初始化"><span class="nav-number">2.1.</span> <span class="nav-text">map初始化</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#map存值"><span class="nav-number">2.2.</span> <span class="nav-text">map存值</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#hash-Grow扩容和迁移"><span class="nav-number">3.</span> <span class="nav-text">hash Grow扩容和迁移</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#hasmap的删除"><span class="nav-number">4.</span> <span class="nav-text">hasmap的删除</span></a></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

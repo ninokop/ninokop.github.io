@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="Go能实现接口的动态性和反射的基础是：编译期为运行时提供了类型信息。interface底层有两种结构，上一节讲了带方法的iface，这一节补充不带方法的eface结构。 interface之efaceGo中的任何对象都可以表示为interface{}。它扮演的角色与C中的void*差不多，区别在于interface{}中包含有类型信息，可以实现反射。  efece数据结构描述：gcdata域用于垃">
+<meta name="keywords" content="Golang">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Go 反射与interface拾遗">
+<meta property="og:url" content="http://yoursite.com/2017/10/30/go-reflect-interface/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="Go能实现接口的动态性和反射的基础是：编译期为运行时提供了类型信息。interface底层有两种结构，上一节讲了带方法的iface，这一节补充不带方法的eface结构。 interface之efaceGo中的任何对象都可以表示为interface{}。它扮演的角色与C中的void*差不多，区别在于interface{}中包含有类型信息，可以实现反射。  efece数据结构描述：gcdata域用于垃">
+<meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2019-05-26T10:41:27.165Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Go 反射与interface拾遗">
+<meta name="twitter:description" content="Go能实现接口的动态性和反射的基础是：编译期为运行时提供了类型信息。interface底层有两种结构，上一节讲了带方法的iface，这一节补充不带方法的eface结构。 interface之efaceGo中的任何对象都可以表示为interface{}。它扮演的角色与C中的void*差不多，区别在于interface{}中包含有类型信息，可以实现反射。  efece数据结构描述：gcdata域用于垃">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2017/10/30/go-reflect-interface/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>Go 反射与interface拾遗 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/10/30/go-reflect-interface/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Go 反射与interface拾遗
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2017-10-30 20:51:40" itemprop="dateCreated datePublished" datetime="2017-10-30T20:51:40+08:00">2017-10-30</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-26 18:41:27" itemprop="dateModified" datetime="2019-05-26T18:41:27+08:00">2019-05-26</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/Golang/" itemprop="url" rel="index"><span itemprop="name">Golang</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>Go能实现接口的动态性和反射的基础是：编译期为运行时提供了类型信息。interface底层有两种结构，上一节讲了带方法的iface，这一节补充不带方法的eface结构。</p>
+<h2 id="interface之eface"><a href="#interface之eface" class="headerlink" title="interface之eface"></a>interface之eface</h2><p>Go中的任何对象都可以表示为<strong>interface{}</strong>。它扮演的角色与C中的<strong>void*</strong>差不多，区别在于interface{}中包含有类型信息，可以实现反射。</p>
+<blockquote>
+<p><strong>efece数据结构描述</strong>：<code>gcdata</code>域用于垃圾回收，<code>size</code>描述类型的大小，<code>hash</code>表示数据的hash值，<code>align</code>是对齐，<code>fieldalign</code>是这个数据嵌入结构体时的对齐，<code>kind</code>是枚举值。<code>alg</code>是函数指针的数组，存储了<code>hash/equal/print/copy</code>四个函数操作。<code>uncommentType</code>指向这个类型的方法集。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> eface <span class="keyword">struct</span> &#123;</span><br><span class="line">	_type *_type</span><br><span class="line">	data unsafe.Pointer</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> _type <span class="keyword">struct</span> &#123;</span><br><span class="line">	size       <span class="keyword">uintptr</span></span><br><span class="line">	ptrdata    <span class="keyword">uintptr</span> <span class="comment">// size of memory prefix holding all pointers</span></span><br><span class="line">	hash       <span class="keyword">uint32</span></span><br><span class="line">	_unused    <span class="keyword">uint8</span></span><br><span class="line">	align      <span class="keyword">uint8</span></span><br><span class="line">	fieldalign <span class="keyword">uint8</span></span><br><span class="line">	kind       <span class="keyword">uint8</span></span><br><span class="line">	alg        *typeAlg</span><br><span class="line">	gcdata  *<span class="keyword">byte</span></span><br><span class="line">	_string *<span class="keyword">string</span></span><br><span class="line">	x       *uncommontype</span><br><span class="line">	ptrto   *_type</span><br><span class="line">	zero    *<span class="keyword">byte</span> <span class="comment">// ptr to the zero value for this type</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="运行时convT2E"><a href="#运行时convT2E" class="headerlink" title="运行时convT2E"></a>运行时convT2E</h3><p><strong>T2E的转换</strong> 赋值给空interface{}，运行时会调用conv类函数<code>convT2E</code>。与<code>convT2I</code>一样，向interface的类型转换<code>var i interface{} = u</code>都存在内存拷贝。看iface.go源码时发现<code>convI2I</code>等接口转换时没有分配内存和拷贝数据，原因可能是Go接口内部的data域，并不开放途径让外部修改，所以接口之间转换可以用同一块内存。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">convT2E</span><span class="params">(t *_type, elem unsafe.Pointer, x unsafe.Pointer)</span> <span class="params">(e <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">	ep := (*eface)(unsafe.Pointer(&amp;e))</span><br><span class="line">  ...</span><br><span class="line">	<span class="keyword">if</span> x == <span class="literal">nil</span> &#123;</span><br><span class="line">		x = newobject(t)</span><br><span class="line">	&#125;</span><br><span class="line">	typedmemmove(t, x, elem)</span><br><span class="line">	ep._type = t</span><br><span class="line">	ep.data = x</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>下面的例子中修改u并不影响i interface的内存数据，因为i在赋值时通过convT2E对u进行了拷贝。这也是<strong>反射非指针变量时无法直接改变变量数据</strong>的原因，因为反射会先把变量转成interface类型，拿到的是变量的副本。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">u := User&#123;<span class="number">1</span>, <span class="string">"Tom"</span>&#125;</span><br><span class="line"><span class="keyword">var</span> i <span class="keyword">interface</span>&#123;&#125; = u</span><br><span class="line">u.id = <span class="number">2</span></span><br><span class="line">u.name = <span class="string">"Jack"</span></span><br><span class="line"><span class="comment">// u &#123;2, "Jack"&#125;</span></span><br><span class="line"><span class="comment">// i.(User) &#123;1, "Tom"&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="nil的理解"><a href="#nil的理解" class="headerlink" title="nil的理解"></a>nil的理解</h3><p>未初始化的interface类型，指针，函数，slice，cannel和map都是nil的。<strong>对于interface比较特殊，只有eface的type和data都是nil，或者iface的type和data都是nil时，interface{}才是nil。</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Duck <span class="keyword">interface</span>&#123;</span><br><span class="line">    Walk()</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">var</span> i <span class="keyword">interface</span>&#123;&#125;   <span class="comment">// nil</span></span><br><span class="line"><span class="keyword">var</span> d Duck   <span class="comment">// nil</span></span><br><span class="line"><span class="keyword">var</span> v *T   <span class="comment">// nil</span></span><br><span class="line">i = v   <span class="comment">// (*T)(nil) not nil</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="type-assertion"><a href="#type-assertion" class="headerlink" title="type assertion"></a>type assertion</h3><p>严格来说Go并不支持泛型编程，但通过interface可实现泛型编程，后面reflect浅析中有个通过reflect实现泛型的例子。interface像其它类型转换的时候一般需要断言。下面只给出了eface的例子，当然也可以通过断言来判断某个类型是否实现了某个接口。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">do</span><span class="params">(v <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">	n, ok := v.(<span class="keyword">int</span>)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;...&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">doswitch</span><span class="params">(i <span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> v := i.(<span class="keyword">type</span>) &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="keyword">int</span>: ...</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对应的go源码在iface.go当中。<code>assertE2T</code>过程判断了eface的type字段是否和目标type相等，相等则还需要拷贝数据。<code>assertI2T</code>也要拷贝数据，不过他比较的是iface.tab._type与目标type是否一致。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">assertE2T</span><span class="params">(t *_type, e <span class="keyword">interface</span>&#123;&#125;, r unsafe.Pointer)</span></span> &#123;</span><br><span class="line">	ep := (*eface)(unsafe.Pointer(&amp;e))</span><br><span class="line">	<span class="keyword">if</span> ep._type == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="built_in">panic</span>(&amp;TypeAssertionError&#123;<span class="string">""</span>, <span class="string">""</span>, *t._string, <span class="string">""</span>&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> ep._type != t &#123;</span><br><span class="line">		<span class="built_in">panic</span>(&amp;TypeAssertionError&#123;<span class="string">""</span>, *ep._type._string, *t._string, <span class="string">""</span>&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> r != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">if</span> isDirectIface(t) &#123;</span><br><span class="line">			writebarrierptr((*<span class="keyword">uintptr</span>)(r), <span class="keyword">uintptr</span>(ep.data))</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			typedmemmove(t, r, ep.data)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="reflect浅析"><a href="#reflect浅析" class="headerlink" title="reflect浅析"></a>reflect浅析</h2><p>反射机制提供了检查存储在接口变量中的[类型 值]对的机制。根据<a href="https://studygolang.com/articles/2157" target="_blank" rel="noopener">Laws Of Reflection</a>Go的反射可以总结三点，即反射可以从interface中获取reflect对象；同时可以通过<code>Interface()</code>方法恢复reflect对象为一个interface；如果要修改反射对象，该对象必须是<code>settable</code>的。</p>
+<h3 id="TypeOf与ValueOf实现"><a href="#TypeOf与ValueOf实现" class="headerlink" title="TypeOf与ValueOf实现"></a>TypeOf与ValueOf实现</h3><p>获取反射对象的实现，是基于对interface底层数据的操作。首先对象经过了<code>convT2E</code>，然后emptyInterface直接指向了eface的type字段。<code>typeOf</code>返回的<strong>Type</strong>是接口，在类型_type上实现了很多操作。<code>valueOf</code>返回的就是<strong>Value</strong>结构体，它包含了数据域和type域信息。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">TypeOf</span><span class="params">(i <span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">Type</span></span> &#123;</span><br><span class="line">	eface := *(*emptyInterface)(unsafe.Pointer(&amp;i))</span><br><span class="line">	<span class="keyword">return</span> toType(eface.typ)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">ValueOf</span><span class="params">(i <span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">Value</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> i == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> Value&#123;&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	escapes(i)</span><br><span class="line">	<span class="keyword">return</span> unpackEface(i)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">unpackEface</span><span class="params">(i <span class="keyword">interface</span>&#123;&#125;)</span> <span class="title">Value</span></span> &#123;</span><br><span class="line">	e := (*emptyInterface)(unsafe.Pointer(&amp;i))</span><br><span class="line">	t := e.typ</span><br><span class="line">	<span class="keyword">if</span> t == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> Value&#123;&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	f := flag(t.Kind())</span><br><span class="line">	<span class="keyword">if</span> ifaceIndir(t) &#123;</span><br><span class="line">		f |= flagIndir</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> Value&#123;t, unsafe.Pointer(e.word), f&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Type <span class="keyword">interface</span>&#123;</span><br><span class="line">  ...</span><br><span class="line">	Method(<span class="keyword">int</span>) Method</span><br><span class="line">	MethodByName(<span class="keyword">string</span>) (Method, <span class="keyword">bool</span>)</span><br><span class="line">	NumMethod() <span class="keyword">int</span></span><br><span class="line">	NumField()</span><br><span class="line">	Field(i) StructField</span><br><span class="line">	FieldByName(name <span class="keyword">string</span>) (StructField, <span class="keyword">bool</span>)</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Value <span class="keyword">struct</span> &#123;</span><br><span class="line">	typ *rtype</span><br><span class="line">	ptr unsafe.Pointer</span><br><span class="line">	flag</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="通过Type获取Struct-Field信息"><a href="#通过Type获取Struct-Field信息" class="headerlink" title="通过Type获取Struct Field信息"></a>通过Type获取Struct Field信息</h3><p>可以通过reflect获取类型实例的结构体信息，比如每个field的名字类型或标签。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// A StructField describes a single field in a struct.</span></span><br><span class="line"><span class="keyword">type</span> StructField <span class="keyword">struct</span> &#123;</span><br><span class="line">	Name <span class="keyword">string</span>  <span class="comment">// Name is the field name.</span></span><br><span class="line">	PkgPath <span class="keyword">string</span></span><br><span class="line">	Type      Type      <span class="comment">// field type</span></span><br><span class="line">	Tag       StructTag <span class="comment">// field tag string</span></span><br><span class="line">	Offset    <span class="keyword">uintptr</span>   <span class="comment">// offset within struct, in bytes</span></span><br><span class="line">	Index     []<span class="keyword">int</span>     <span class="comment">// index sequence for Type.FieldByIndex</span></span><br><span class="line">	Anonymous <span class="keyword">bool</span>      <span class="comment">// is an embedded field</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Person <span class="keyword">struct</span> &#123;</span><br><span class="line">	Name <span class="keyword">string</span> <span class="string">`json:"name"`</span></span><br><span class="line">	Age  <span class="keyword">int</span>    <span class="string">`json:"age"`</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	nino := Person&#123;<span class="string">"nino"</span>, <span class="number">27</span>&#125;</span><br><span class="line">	t := reflect.TypeOf(nino)</span><br><span class="line">	n := t.NumField()</span><br><span class="line">	<span class="keyword">for</span> i := <span class="number">0</span>; i &lt; n; i++ &#123;</span><br><span class="line">		fmt.Println(t.Field(i).Name, t.Field(i).Type, t.Field(i).Tag)</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// Name string json:"name"</span></span><br><span class="line"><span class="comment">// Age int json:"age"</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="通过Value实现泛型"><a href="#通过Value实现泛型" class="headerlink" title="通过Value实现泛型"></a>通过Value实现泛型</h3><p>为了解决method接受不同类型的slice为入参，可以用反射来完成。对于可记长度和可随机访问的类型，可以通过<code>v.Len()</code>和<code>v.Index(i)</code>获取他们的第几个元素。</p>
+<blockquote>
+<p><strong>v.Index(i).Interface()</strong>将reflect.Value反射回了interface类型</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">method</span><span class="params">(in <span class="keyword">interface</span>&#123;&#125;)</span> <span class="params">(ok <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">	v := reflect.ValueOf(in)</span><br><span class="line">	<span class="keyword">if</span> v.Kind() == reflect.Slice &#123;</span><br><span class="line">		ok = <span class="literal">true</span></span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">	&#125;</span><br><span class="line">	num := v.Len()</span><br><span class="line">	<span class="keyword">for</span> i := <span class="number">0</span>; i &lt; num; i++ &#123;</span><br><span class="line">		fmt.Println(v.Index(i).Interface())</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> ok</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	s := []<span class="keyword">int</span>&#123;<span class="number">1</span>, <span class="number">3</span>, <span class="number">5</span>, <span class="number">7</span>, <span class="number">9</span>&#125;</span><br><span class="line">	b := []<span class="keyword">float64</span>&#123;<span class="number">1.2</span>, <span class="number">3.4</span>, <span class="number">5.6</span>, <span class="number">7.8</span>&#125;</span><br><span class="line">	method(s)</span><br><span class="line">	method(b)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="通过Elem修改reflect对象值"><a href="#通过Elem修改reflect对象值" class="headerlink" title="通过Elem修改reflect对象值"></a>通过Elem修改reflect对象值</h3><p><strong>对LawsOfReflect第三点的理解</strong> <code>reflect.ValueOf</code> 如果直接传入x，则v是x的一个副本的<strong>reflect</strong>对象。修改v的值并不会作用到x上。p是指向x的指针的reflect对象，修改p的值是在修改指针的指向，同样不会作用到x上，因此也是<strong>CanNotSet</strong>的。只有通过<code>p.Elem()</code>相当于获取了*p的<strong>reflect</strong>对象，这时才能使用<code>v.SetFloat(7.2)</code>来对原始的数据进行修改。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> x <span class="keyword">float64</span> = <span class="number">3.4</span></span><br><span class="line">v := reflect.ValueOf(x)   <span class="comment">// can not set</span></span><br><span class="line">p := reflect.ValueOf(&amp;x)  <span class="comment">// can not set</span></span><br><span class="line">e := p.Elem()  <span class="comment">// can set</span></span><br></pre></td></tr></table></figure>
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Golang/" rel="tag"># Golang</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/10/29/go-interface/" rel="next" title="Go 方法调用与接口">
+                <i class="fa fa-chevron-left"></i> Go 方法调用与接口
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/11/07/go-channel/" rel="prev" title="Go Channel的实现">
+                Go Channel的实现 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/nino.jpg" alt="nino">
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <div class="site-description motion-element" itemprop="description"></div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">26</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">10</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/ninokop" title="GitHub &rarr; https://github.com/ninokop" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://weibo.com/u/1732126300" title="Weibo &rarr; https://weibo.com/u/1732126300" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#interface之eface"><span class="nav-number">1.</span> <span class="nav-text">interface之eface</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#运行时convT2E"><span class="nav-number">1.1.</span> <span class="nav-text">运行时convT2E</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#nil的理解"><span class="nav-number">1.2.</span> <span class="nav-text">nil的理解</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#type-assertion"><span class="nav-number">1.3.</span> <span class="nav-text">type assertion</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#reflect浅析"><span class="nav-number">2.</span> <span class="nav-text">reflect浅析</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#TypeOf与ValueOf实现"><span class="nav-number">2.1.</span> <span class="nav-text">TypeOf与ValueOf实现</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#通过Type获取Struct-Field信息"><span class="nav-number">2.2.</span> <span class="nav-text">通过Type获取Struct Field信息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#通过Value实现泛型"><span class="nav-number">2.3.</span> <span class="nav-text">通过Value实现泛型</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#通过Elem修改reflect对象值"><span class="nav-number">2.4.</span> <span class="nav-text">通过Elem修改reflect对象值</span></a></li></ol></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="gRPC-BalancergPRC没有提供Balancer的实现，但给出了接口。基本原理是gRPC的client端为它要访问的target地址维护了ClientConn。在没有Balancer时这个ClientConn的conns只有一个address和它对应的一个连接，当有Balancer时Balancer会给出target对应的一组地址列表，ClientConn要维护这组地址对应的所有连接。">
+<meta name="keywords" content="micro-service,RPC">
+<meta property="og:type" content="article">
+<meta property="og:title" content="gRPC负载均衡浅析">
+<meta property="og:url" content="http://yoursite.com/2017/11/12/grpc-loadbalance/index.html">
+<meta property="og:site_name" content="nino&#39;s blog">
+<meta property="og:description" content="gRPC-BalancergPRC没有提供Balancer的实现，但给出了接口。基本原理是gRPC的client端为它要访问的target地址维护了ClientConn。在没有Balancer时这个ClientConn的conns只有一个address和它对应的一个连接，当有Balancer时Balancer会给出target对应的一组地址列表，ClientConn要维护这组地址对应的所有连接。">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/grpc-lb.png">
+<meta property="og:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/hash-ring.png">
+<meta property="og:updated_time" content="2019-05-26T10:48:14.604Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="gRPC负载均衡浅析">
+<meta name="twitter:description" content="gRPC-BalancergPRC没有提供Balancer的实现，但给出了接口。基本原理是gRPC的client端为它要访问的target地址维护了ClientConn。在没有Balancer时这个ClientConn的conns只有一个address和它对应的一个连接，当有Balancer时Balancer会给出target对应的一组地址列表，ClientConn要维护这组地址对应的所有连接。">
+<meta name="twitter:image" content="http://yoursite.com/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/grpc-lb.png">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2017/11/12/grpc-loadbalance/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>gRPC负载均衡浅析 | nino's blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">nino's blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">我的读书笔记 我的自留地</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/11/12/grpc-loadbalance/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="nino">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/nino.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="nino's blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">gRPC负载均衡浅析
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2017-11-12 23:11:04" itemprop="dateCreated datePublished" datetime="2017-11-12T23:11:04+08:00">2017-11-12</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-26 18:48:14" itemprop="dateModified" datetime="2019-05-26T18:48:14+08:00">2019-05-26</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/RPC/" itemprop="url" rel="index"><span itemprop="name">RPC</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h2 id="gRPC-Balancer"><a href="#gRPC-Balancer" class="headerlink" title="gRPC-Balancer"></a>gRPC-Balancer</h2><p>gPRC没有提供Balancer的实现，但给出了接口。基本原理是<strong>gRPC的client端为它要访问的target地址维护了ClientConn</strong>。在没有Balancer时这个ClientConn的conns只有一个address和它对应的一个连接，当有Balancer时Balancer会给出target对应的一组地址列表，ClientConn要维护这组地址对应的所有连接。</p>
+<p><img src="/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/grpc-lb.png" alt="grpc-lb"></p>
+<ul>
+<li><strong>Balancer根据Resolver去Watch具体target的地址信息变化，并通知clientConn更新它的缓存</strong>。这是通过Balancer的Start&amp;Notify方法实现的，它初始化Resolver，并开始Watch注册中心，Watch的事件将用来更新Balancer自身的addr缓存，并通过Notify通知clientConn更新整个连接池的缓存。</li>
+</ul>
+<ul>
+<li><strong>每次调用时Balancer通过特定的策略给出具体地址，client从conns中找到对应的conn去transport。</strong>这是通过Balancer的Get方法实现的，Get方法从已建立好的Balancer的addrs中根据不同的lb策略选择这次的addr返回。</li>
+<li>Balancer在缓存中维护地址列表，并提供接口给clientConn根据连接状态，更新地址列表中的地址状态。</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ClientConn <span class="keyword">struct</span> &#123;</span><br><span class="line">    target    <span class="keyword">string</span></span><br><span class="line">    conns <span class="keyword">map</span>[Address]*addrConn</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Balancer <span class="keyword">interface</span> &#123;</span><br><span class="line">    Start(target <span class="keyword">string</span>, config BalancerConfig) error</span><br><span class="line">    Up(addr Address) (down <span class="function"><span class="keyword">func</span><span class="params">(error)</span>)</span></span><br><span class="line"><span class="function">    <span class="title">Get</span><span class="params">(ctx context.Context, opts BalancerGetOptions)</span> <span class="params">(addr Address, put <span class="keyword">func</span>()</span>, <span class="title">err</span> <span class="title">error</span>)</span></span><br><span class="line"><span class="function">    <span class="title">Notify</span><span class="params">()</span> &lt;-<span class="title">chan</span> []<span class="title">Address</span></span></span><br><span class="line"><span class="function">    <span class="title">Close</span><span class="params">()</span> <span class="title">error</span></span></span><br><span class="line"><span class="function">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>总结下来就是Balander需要域名解析<code>Resolver</code>提供的Watcher，还需要负载均衡策略policy（<code>selector</code>）。如图所示，gRPC没有提供Resolver的实现，就是没有提供服务注册发现监听的实现，需要开发者结合etcd consul等注册中心自己实现该接口。lb策略gRPC有个roundRobin的实现可供参考。</p>
+<h3 id="ClientConn-amp-Balancer"><a href="#ClientConn-amp-Balancer" class="headerlink" title="ClientConn &amp; Balancer"></a>ClientConn &amp; Balancer</h3><p>简单总结gRPC客户端在<code>Dial</code>时负载均衡相关操作。Dial的过程会返回<code>ClientConn</code>，其中重要的数据成员是维护了一组对应target地址的连接<code>conns map[Address]*addrConn</code>。在Dial中开启goroutine完成了balancer的Start，即启动resolver并开始watchUpdates。同时开始<code>lbWatcher</code>，开始维护<code>clientconn</code>的连接池。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> <span class="built_in">close</span>(waitC)</span><br><span class="line">    <span class="keyword">if</span> cc.dopts.balancer != <span class="literal">nil</span> &#123;</span><br><span class="line">        err := cc.dopts.balancer.Start(target, config)</span><br><span class="line">        ch := cc.dopts.balancer.Notify()</span><br><span class="line">        <span class="keyword">if</span> ch != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="comment">// if not block</span></span><br><span class="line">            <span class="keyword">go</span> cc.lbWatcher(<span class="literal">nil</span>)</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;()</span><br></pre></td></tr></table></figure>
+
+<p>Notify返回的ch是balacer提供给外部的全量addrs，lbWatcher每次都对比addrs和目前自己维护的clientconn，新增的重新建立连接resetAddrConn，删掉的tearDownConn。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(cc *ClientConn)</span> <span class="title">lbWatcher</span><span class="params">(doneChan <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> addrs := <span class="keyword">range</span> cc.dopts.balancer.Notify() &#123;</span><br><span class="line">        <span class="keyword">var</span> (</span><br><span class="line">            add []Address   <span class="comment">// Addresses need to setup connections.</span></span><br><span class="line">            del []*addrConn <span class="comment">// Connections need to tear down.</span></span><br><span class="line">        )</span><br><span class="line">        cc.mu.Lock()</span><br><span class="line">        <span class="keyword">for</span> _, a := <span class="keyword">range</span> addrs &#123;</span><br><span class="line">            <span class="keyword">if</span> _, ok := cc.conns[a]; !ok &#123;</span><br><span class="line">                add = <span class="built_in">append</span>(add, a)</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">for</span> k, c := <span class="keyword">range</span> cc.conns &#123;</span><br><span class="line">            <span class="keyword">var</span> keep <span class="keyword">bool</span></span><br><span class="line">            <span class="keyword">for</span> _, a := <span class="keyword">range</span> addrs &#123;</span><br><span class="line">                <span class="keyword">if</span> k == a &#123;</span><br><span class="line">                    keep = <span class="literal">true</span></span><br><span class="line">                    <span class="keyword">break</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> !keep &#123;</span><br><span class="line">                del = <span class="built_in">append</span>(del, c)</span><br><span class="line">                <span class="built_in">delete</span>(cc.conns, c.addr)</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        cc.mu.Unlock()</span><br><span class="line">        <span class="keyword">for</span> _, a := <span class="keyword">range</span> add &#123;</span><br><span class="line">            cc.resetAddrConn(a, <span class="literal">false</span>, <span class="literal">nil</span>)</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">for</span> _, c := <span class="keyword">range</span> del &#123;</span><br><span class="line">            c.tearDown(errConnDrain)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>最后在clientConn在<code>getTransport</code>时，通过<code>balancer.Get</code>可以获取满足lb策略的addr，并最终在ClientConn维护的conn缓存中获取对应的连接。</strong></p>
+<h3 id="Start"><a href="#Start" class="headerlink" title="Start"></a>Start</h3><p>gRPC给了一个RoundRobin的实现，其中addrs是所有客户端要连接的地址。addrCh是用来通知gRPC内部client地址列表的chan，也就是上面<code>Notify()</code>返回的chan。waitCh在无地址可连接时block。next指向Get方法返回的addrs id。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> roundRobin <span class="keyword">struct</span> &#123;</span><br><span class="line">    r      naming.Resolver</span><br><span class="line">    w      naming.Watcher</span><br><span class="line">    addrs  []*addrInfo </span><br><span class="line">    mu     sync.Mutex</span><br><span class="line">    addrCh <span class="keyword">chan</span> []Address </span><br><span class="line">    next   <span class="keyword">int</span>            <span class="comment">// index of the next address to return for Get()</span></span><br><span class="line">    waitCh <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;  </span><br><span class="line">    done   <span class="keyword">bool</span>           <span class="comment">// The Balancer is closed.</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>start方法通过Resolve获取对应target的watcher，并开始<code>watchAddrUpdates</code>。watcher的<code>Next</code>方法在没有事件时block，一旦有updates产生，balancer将按事件类型更新本地的addrs缓存，并把全部addrs发到addrCh上，这个chan通过Notify这个Balancer的方法对外提供读取。</p>
+<blockquote>
+<p>slice copy的用法是slice长度较小的决定，copy是删除slice元素的一个简单方法</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rr *roundRobin)</span> <span class="title">Start</span><span class="params">(target <span class="keyword">string</span>, config BalancerConfig)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    rr.mu.Lock()</span><br><span class="line">    <span class="keyword">defer</span> rr.mu.Unlock()</span><br><span class="line">    w, err := rr.r.Resolve(target)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;</span><br><span class="line">    rr.w = w</span><br><span class="line">    rr.addrCh = <span class="built_in">make</span>(<span class="keyword">chan</span> []Address)</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">for</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> err := rr.watchAddrUpdates(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rr *roundRobin)</span> <span class="title">watchAddrUpdates</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    updates, err := rr.w.Next()</span><br><span class="line">    <span class="comment">// lock...</span></span><br><span class="line">    <span class="keyword">for</span> _, update := <span class="keyword">range</span> updates &#123;</span><br><span class="line">        addr := Address&#123;</span><br><span class="line">            Addr:     update.Addr,</span><br><span class="line">            Metadata: update.Metadata,</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">switch</span> update.Op &#123;</span><br><span class="line">        <span class="keyword">case</span> naming.Add:</span><br><span class="line">            <span class="keyword">var</span> exist <span class="keyword">bool</span></span><br><span class="line">            <span class="keyword">for</span> _, v := <span class="keyword">range</span> rr.addrs &#123;</span><br><span class="line">                <span class="keyword">if</span> addr == v.addr &#123;</span><br><span class="line">                    exist = <span class="literal">true</span></span><br><span class="line">                    <span class="keyword">break</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> exist &#123;</span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">            &#125;</span><br><span class="line">            rr.addrs = <span class="built_in">append</span>(rr.addrs, &amp;addrInfo&#123;addr: addr&#125;)</span><br><span class="line">        <span class="keyword">case</span> naming.Delete:</span><br><span class="line">            <span class="keyword">for</span> i, v := <span class="keyword">range</span> rr.addrs &#123;</span><br><span class="line">                <span class="keyword">if</span> addr == v.addr &#123;</span><br><span class="line">                    <span class="built_in">copy</span>(rr.addrs[i:], rr.addrs[i+<span class="number">1</span>:])</span><br><span class="line">                    rr.addrs = rr.addrs[:<span class="built_in">len</span>(rr.addrs)<span class="number">-1</span>]</span><br><span class="line">                    <span class="keyword">break</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    open := <span class="built_in">make</span>([]Address, <span class="built_in">len</span>(rr.addrs))</span><br><span class="line">    <span class="keyword">for</span> i, v := <span class="keyword">range</span> rr.addrs &#123;</span><br><span class="line">        open[i] = v.addr</span><br><span class="line">    &#125;</span><br><span class="line">    rr.addrCh &lt;- open</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>gRPC并没有提供Resolver的实现，只是给出了它的接口。可以外部通过对接etcd consul等注册中心来实现resolver接口，它返回对特定target的Watcher，watcher的Next给的是一次增量事件，需要balancer自己解析事件类型和维护本地的addrs列表。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Resolver <span class="keyword">interface</span> &#123;</span><br><span class="line">    Resolve(target <span class="keyword">string</span>) (Watcher, error)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Watcher <span class="keyword">interface</span> &#123;</span><br><span class="line">    Next() ([]*Update, error)</span><br><span class="line">    Close()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Up-Notify-Close"><a href="#Up-Notify-Close" class="headerlink" title="Up Notify Close"></a>Up Notify Close</h3><p>up方法是用来set连接状态的。下面节选了一段resetTransport的实现，balancer的主要作用是在clientconn维护连接池时，同步的更新balancer维护的addrs的连接状态，即是否connected，并且返回将addrs状态设为非连接的方法ac.down。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ac *addrConn)</span> <span class="title">resetTransport</span><span class="params">(closeTransport <span class="keyword">bool</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> retries := <span class="number">0</span>; ; retries++ &#123;</span><br><span class="line">        newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)</span><br><span class="line">        ac.transport = newTransport</span><br><span class="line">        <span class="keyword">if</span> ac.cc.dopts.balancer != <span class="literal">nil</span> &#123;</span><br><span class="line">            ac.down = ac.cc.dopts.balancer.Up(ac.addr)</span><br><span class="line">        &#125;</span><br><span class="line">        ac.mu.Unlock()</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rr *roundRobin)</span> <span class="title">Up</span><span class="params">(addr Address)</span> <span class="title">func</span><span class="params">(error)</span></span> &#123;</span><br><span class="line">    rr.mu.Lock()</span><br><span class="line">    <span class="keyword">defer</span> rr.mu.Unlock()</span><br><span class="line">    <span class="keyword">var</span> cnt <span class="keyword">int</span></span><br><span class="line">    <span class="keyword">for</span> _, a := <span class="keyword">range</span> rr.addrs &#123;</span><br><span class="line">        <span class="keyword">if</span> a.addr == addr &#123;</span><br><span class="line">            <span class="keyword">if</span> a.connected &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">            &#125;</span><br><span class="line">            a.connected = <span class="literal">true</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> a.connected &#123;</span><br><span class="line">            cnt++</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// addr is only one which is connected. Notify the Get() callers who are blocking.</span></span><br><span class="line">    <span class="keyword">if</span> cnt == <span class="number">1</span> &amp;&amp; rr.waitCh != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="built_in">close</span>(rr.waitCh)</span><br><span class="line">        rr.waitCh = <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">(err error)</span></span> &#123;</span><br><span class="line">        rr.down(addr, err)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Notify就是把watchAddrUpdates维护的全量adrrs 返回给lbWatcher，供上层维护clientconn。Close会关掉addrch和waitch，<strong>同时要关掉resolve的watcher。</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rr *roundRobin)</span> <span class="title">Notify</span><span class="params">()</span> &lt;-<span class="title">chan</span> []<span class="title">Address</span></span> &#123;</span><br><span class="line">    <span class="keyword">return</span> rr.addrCh</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Get"><a href="#Get" class="headerlink" title="Get"></a>Get</h3><p>Get方法按负载均衡策略返回balancer某个状态为connected的addr，gRPC给了个rouncrobin的例子，通过next这个index来确定每次连接的addr。如果没有addr，可以不block，直接返回导致调用失败，也可以利用wiatCh来做for-select，直到上层在连接恢复时调用Up，可以  close(rr.waitCh)唤醒这个block，代码省略。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rr *roundRobin)</span> <span class="title">Get</span><span class="params">(ctx context.Context, opts BalancerGetOptions)</span> <span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">    addr Address, put <span class="keyword">func</span>()</span>, <span class="title">err</span> <span class="title">error</span>)</span> &#123;</span><br><span class="line">    <span class="keyword">var</span> ch <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line">    rr.mu.Lock()</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(rr.addrs) &gt; <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> rr.next &gt;= <span class="built_in">len</span>(rr.addrs) &#123;</span><br><span class="line">            rr.next = <span class="number">0</span></span><br><span class="line">        &#125;</span><br><span class="line">        next := rr.next</span><br><span class="line">        <span class="keyword">for</span> &#123;</span><br><span class="line">            a := rr.addrs[next]</span><br><span class="line">            next = (next + <span class="number">1</span>) % <span class="built_in">len</span>(rr.addrs)</span><br><span class="line">            <span class="keyword">if</span> a.connected &#123;</span><br><span class="line">                addr = a.addr</span><br><span class="line">                rr.next = next</span><br><span class="line">                rr.mu.Unlock()</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> next == rr.next &#123;</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> !opts.BlockingWait &#123;</span><br><span class="line">        <span class="comment">// Returns the next addr on rr.addrs for failfast RPCs.</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// Wait on rr.waitCh for non-failfast RPCs.</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Selector"><a href="#Selector" class="headerlink" title="Selector"></a>Selector</h2><p>总结完Balancer的使用和基本实现，因为负载均衡策略和Resolver可以按接口自行扩展，所有将这两部分单独说说，resolver的实现下一节写服务注册中心再说吧，这个库<a href="liyue201/grpc-lb">grpc-lb</a>可以参考。它的rouncrobin就是gRPC的实现，只是把balancer内部跟策略相关的重新封装成了Selector，在此基础上重写了Get方法实现了几种负载均衡策略。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Selector <span class="keyword">interface</span> &#123;</span><br><span class="line">    Add(addr grpc.Address) error</span><br><span class="line">    Delete(addr grpc.Address) error</span><br><span class="line">    Up(addr grpc.Address) (cnt <span class="keyword">int</span>, connected <span class="keyword">bool</span>)</span><br><span class="line">    Down(addr grpc.Address) error</span><br><span class="line">    AddrList() []grpc.Address</span><br><span class="line">    Get(ctx context.Context) (grpc.Address, error)</span><br><span class="line">    Put(addr <span class="keyword">string</span>) error</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中Add、Delete用来watchAddrUpdates时更新selector缓存。AddList用于给Notify返回全量addrs。Up、Down用来更新addr的connected状态。Get用来给不同lb-selector实现选择算法。这里的Put是作者给每个addr的负载load信息自减的方法。详见<a href="liyue201/grpc-lb">grpc-lb</a>。</p>
+<h3 id="random"><a href="#random" class="headerlink" title="random"></a>random</h3><p>在gRPC的Selector中包含实现Selector接口的baseSelector要考虑当前connected的状态，去除这些跟框架相关的代码后，就是<code>rand.Int() % len(addrs)</code>。这里通常都要初始化随机种子，否则每次获取的随机值都一样，通常用当前时间来初始化一下种子<code>rand.Seed(time.Now().UnixNano())</code>，保证种子的随机。</p>
+<blockquote>
+<p>官网文档里有提示  Seed should not be called concurrently with any other Rand method.  如果并发的seed<a href="http://blog.csdn.net/mingzhehaolove/article/details/77305832" target="_blank" rel="noopener">rand.Seed踩坑</a>提到会导致goroutine暴增。</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">init</span><span class="params">()</span></span> &#123; rand.Seed(time.Now().UnixNano()) &#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Random</span><span class="params">(addrs []Address)</span> <span class="params">(Address, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(addrs) == <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, ErrNoneAvailable</span><br><span class="line">	&#125;</span><br><span class="line">	k := rand.Int() % <span class="built_in">len</span>(addrs)</span><br><span class="line">	<span class="keyword">return</span> addrs[k], <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="roundrobin"><a href="#roundrobin" class="headerlink" title="roundrobin"></a>roundrobin</h3><p>轮询就是通过维护一个next作为index，每次+1完成的。代码例子经过调整，省去了很多，在实际的例子中要注意mux的使用，尽量使加锁范围小。还有问题是从balancer的watchUpdates而获取的addrs列表动态变化，缓存维护了connected状态可以尽量避免访问到已经teardown的实例，但仍然要提供容错和backOff机制。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> next <span class="keyword">int</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">RoundRobin</span><span class="params">(addrs []Address, metadata <span class="keyword">interface</span>&#123;&#125;)</span> <span class="params">(Address, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> mtx sync.Mutex</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(addrs) == <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, ErrNoneAvailable</span><br><span class="line">	&#125;</span><br><span class="line">	mtx.Lock()</span><br><span class="line">	addr := addrs[next%<span class="built_in">len</span>(addrs)]</span><br><span class="line">	next++</span><br><span class="line">	mtx.Unlock()</span><br><span class="line">	<span class="keyword">return</span> addr, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="latency-or-leastaction"><a href="#latency-or-leastaction" class="headerlink" title="latency or leastaction"></a>latency or leastaction</h3><p>根据client端与server端实际连接动态调整addr的策略。leastaction需要额外统计当前与每个服务实例的连接数，选择服务实例连接数最少的访问。latency要计算与每个服务实例的平均时延，选择平均时延最小的实例访问。</p>
+<blockquote>
+<p><a href="https://github.com/ServiceComb/go-chassis/blob/master/core/loadbalance/latency_strategy.go" target="_blank" rel="noopener">go-chassis</a>有类似实现，主要是通过transport统计latency，由latency_strategy管理和保存平均时延 </p>
+</blockquote>
+<h3 id="consistent-hash"><a href="#consistent-hash" class="headerlink" title="consistent hash"></a>consistent hash</h3><p>这个以后再写一篇单独的分析吧，这里简单总结个大概。一致性hash是要解决当节点数量变化时，原有的数据来源hash到的节点（cache）基本不一致（失效）的问题，通过一致性hash希望将节点变化时，数据迁移量降到最低。</p>
+<blockquote>
+<p>基本原理是hash ring，即将节点node本身也hash到环上，通过数据和节点的hash相对位置来决定数据归属，因此当有新node加入时只有一部分的数据迁移。但事实上，这样的一致性hash导致数据分布不均匀，因为node在hash ring上的分布不均匀。分布不均匀的问题通过引入虚拟节点来解决，虚拟节点是均匀分布在ring上的，数据做两次match，最终到实际节点上。这样来保证数据分布的均匀性。</p>
+</blockquote>
+<p><img src="/2017/11/12/grpc-loadbalance/gRPC%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E6%B5%85%E6%9E%90/hash-ring.png" alt="grpc-lb"></p>
+<p><a href="https://github.com/golang/groupcache" target="_blank" rel="noopener">groupcache</a>有个consistenthash的实现，<a href="https://github.com/royhunter/ConsistentHash" target="_blank" rel="noopener">royhunter</a>有个带虚拟节点的实现。以groupcache为例，默认HashFunc是<code>crc32.ChecksumIEEE</code>。<code>keys</code>相当于是<code>hashRing</code>，replicas相当于虚拟节点。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Hash <span class="function"><span class="keyword">func</span><span class="params">(data []<span class="keyword">byte</span>)</span> <span class="title">uint32</span></span></span><br><span class="line"><span class="function"><span class="title">type</span> <span class="title">Map</span> <span class="title">struct</span></span> &#123;</span><br><span class="line">    hash     Hash</span><br><span class="line">    replicas <span class="keyword">int</span></span><br><span class="line">    keys     []<span class="keyword">int</span> <span class="comment">// Sorted</span></span><br><span class="line">    hashMap  <span class="keyword">map</span>[<span class="keyword">int</span>]<span class="keyword">string</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在添加节点时，为每个节点创建<code>replica</code>个虚拟节点，并计算虚拟节点的hash值存入<code>hashring</code>，也就是keys这个slice中，同时把这些虚拟节点的hash值与node的对应关系保存在<code>hashMap</code>。最后给keys排个序，就像在环上分布，顺时针递增一样。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span> <span class="title">Add</span><span class="params">(keys ...<span class="keyword">string</span>)</span></span> &#123;</span><br><span class="line">    <span class="keyword">for</span> _, key := <span class="keyword">range</span> keys &#123;</span><br><span class="line">        <span class="keyword">for</span> i := <span class="number">0</span>; i &lt; m.replicas; i++ &#123;</span><br><span class="line">            hash := <span class="keyword">int</span>(m.hash([]<span class="keyword">byte</span>(strconv.Itoa(i) + key)))</span><br><span class="line">            m.keys = <span class="built_in">append</span>(m.keys, hash)</span><br><span class="line">            m.hashMap[hash] = key</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    sort.Ints(m.keys)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Get方法是获取数据对应的节点，相当于负载均衡中源ip对应到哪个节点或哪个cache。计算数据的hash，并在hashRing上二分查找第一个大于hash的虚拟节点，也就通过hashMap找到了对应的真实节点。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *Map)</span> <span class="title">Get</span><span class="params">(key <span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> m.IsEmpty() &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">""</span></span><br><span class="line">    &#125;</span><br><span class="line">    hash := <span class="keyword">int</span>(m.hash([]<span class="keyword">byte</span>(key)))</span><br><span class="line">    <span class="comment">// Binary search for appropriate replica.</span></span><br><span class="line">    idx := sort.Search(<span class="built_in">len</span>(m.keys), </span><br><span class="line">           <span class="function"><span class="keyword">func</span><span class="params">(i <span class="keyword">int</span>)</span> <span class="title">bool</span></span> &#123; <span class="keyword">return</span> m.keys[i] &gt;= hash &#125;)</span><br><span class="line">    <span class="comment">// Means we have cycled back to the first replica.</span></span><br><span class="line">    <span class="keyword">if</span> idx == <span class="built_in">len</span>(m.keys) &#123;</span><br><span class="line">        idx = <span class="number">0</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> m.hashMap[m.keys[idx]]</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="session-stickiness"><a href="#session-stickiness" class="headerlink" title="session stickiness"></a>session stickiness</h3><p>会话保持是指在负载均衡器上有一种机制，在作负载均衡的同时，还保证同一用户相关连的访问请求会被分配到同一台服务器上。 一致性hash类似这个问题，可以保证同一IP来的连接都hash到同一个node，在node动态变化时会带来某一些session失效。</p>
+<blockquote>
+<p><a href="https://github.com/ServiceComb/go-chassis" target="_blank" rel="noopener">go-chassis</a>有基于cookie做session保持的一种实现，即配置lb策略为session_stickiness时，每次transport后都会checkForSessionID。若req有而sessionCache没有，则生成sessionID写入response的cookie。客户端可以从response中的cookie拿到sessionID，在下一次调用时加入到req的header中，在lb时将从sessionCache找到对应的实例地址。若req和cache都有则更新cache中的timeout时间。</p>
+<p>同时支持计算该session-node失败次数，超过默认5次失败，则删除sessionCache中对应的记录，然后下次请求将roundrobin调度到另一个节点，然后开始会话保持。</p>
+</blockquote>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><p><a href="https://segmentfault.com/a/1190000008672912" target="_blank" rel="noopener">etcdv3， gRPC服务发现和负载均衡</a></p>
+<p><a href="http://blog.jobbole.com/113417/" target="_blank" rel="noopener">负载均衡的总结和思考</a></p>
+<p><a href="https://yikun.github.io/2016/06/09/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95%E7%9A%84%E7%90%86%E8%A7%A3%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_blank" rel="noopener">一致性哈希算法的理解与实践</a></p>
+<p><a href="http://afghl.github.io/2016/07/04/consistent-hashing.html" target="_blank" rel="noopener">一致性hash原理</a></p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/micro-service/" rel="tag"># micro-service</a>
+          
+            <a href="/tags/RPC/" rel="tag"># RPC</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/11/07/go-select/" rel="next" title="Go Select的实现">
+                <i class="fa fa-chevron-left"></i> Go Select的实现
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/11/13/grpc-interceptor/" rel="prev" title="gRPC interceptor">
+                gRPC interceptor <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/images/nino.jpg" alt="nino">
+            
+              <p class="site-author-name" itemprop="name">nino</p>
+              <div class="site-description motion-element" itemprop="description"></div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">26</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">10</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/ninokop" title="GitHub &rarr; https://github.com/ninokop" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://weibo.com/u/1732126300" title="Weibo &rarr; https://weibo.com/u/1732126300" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#gRPC-Balancer"><span class="nav-number">1.</span> <span class="nav-text">gRPC-Balancer</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ClientConn-amp-Balancer"><span class="nav-number">1.1.</span> <span class="nav-text">ClientConn &amp; Balancer</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Start"><span class="nav-number">1.2.</span> <span class="nav-text">Start</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Up-Notify-Close"><span class="nav-number">1.3.</span> <span class="nav-text">Up Notify Close</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Get"><span class="nav-number">1.4.</span> <span class="nav-text">Get</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Selector"><span class="nav-number">2.</span> <span class="nav-text">Selector</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#random"><span class="nav-number">2.1.</span> <span class="nav-text">random</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#roundrobin"><span class="nav-number">2.2.</span> <span class="nav-text">roundrobin</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#latency-or-leastaction"><span class="nav-number">2.3.</span> <span class="nav-text">latency or leastaction</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#consistent-hash"><span class="nav-number">2.4.</span> <span class="nav-text">consistent hash</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#session-stickiness"><span class="nav-number">2.5.</span> <span class="nav-text">session stickiness</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference"><span class="nav-number">3.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">nino</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
