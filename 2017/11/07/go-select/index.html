@@ -104,12 +104,12 @@
 <meta property="og:site_name" content="nino&#39;s blog">
 <meta property="og:description" content="select语法总结 select对应的每个case如果有已经准备好的case 则进行chan读写操作；若没有则执行defualt语句；若都没有则阻塞当前goroutine，直到某个chan准备好可读或可写，完成对应的case后退出。 Select的内存布局了解chanel的实现后对select的语法有个疑问，select如何实现多路复用的，为什么没有在第一个channel操作时阻塞 从而导致后面">
 <meta property="og:locale" content="default">
-<meta property="og:image" content="http://yoursite.com/2017/11/07/go-select/Go-Select的实现/select1.png">
-<meta property="og:updated_time" content="2019-05-26T10:33:56.477Z">
+<meta property="og:image" content="http://yoursite.com/2017/11/07/go-select/select1.png">
+<meta property="og:updated_time" content="2019-05-27T03:12:40.652Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Go Select的实现">
 <meta name="twitter:description" content="select语法总结 select对应的每个case如果有已经准备好的case 则进行chan读写操作；若没有则执行defualt语句；若都没有则阻塞当前goroutine，直到某个chan准备好可读或可写，完成对应的case后退出。 Select的内存布局了解chanel的实现后对select的语法有个疑问，select如何实现多路复用的，为什么没有在第一个channel操作时阻塞 从而导致后面">
-<meta name="twitter:image" content="http://yoursite.com/2017/11/07/go-select/Go-Select的实现/select1.png">
+<meta name="twitter:image" content="http://yoursite.com/2017/11/07/go-select/select1.png">
 
 
 
@@ -407,7 +407,7 @@
                 
                   <span class="post-meta-item-text">Edited on</span>
                 
-                <time title="Modified: 2019-05-26 18:33:56" itemprop="dateModified" datetime="2019-05-26T18:33:56+08:00">2019-05-26</time>
+                <time title="Modified: 2019-05-27 11:12:40" itemprop="dateModified" datetime="2019-05-27T11:12:40+08:00">2019-05-27</time>
               
             
           </span>
@@ -472,7 +472,7 @@
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> hselect <span class="keyword">struct</span> &#123;</span><br><span class="line">    tcase     <span class="keyword">uint16</span>   <span class="comment">// total count of scase[]</span></span><br><span class="line">    ncase     <span class="keyword">uint16</span>   <span class="comment">// currently filled scase[]</span></span><br><span class="line">    pollorder *<span class="keyword">uint16</span>  <span class="comment">// case poll order</span></span><br><span class="line">    lockorder **hchan  <span class="comment">// channel lock order</span></span><br><span class="line">    scase     [<span class="number">1</span>]scase <span class="comment">// one per case (in order of appearance)</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> scase <span class="keyword">struct</span> &#123;</span><br><span class="line">    elem        unsafe.Pointer <span class="comment">// data element</span></span><br><span class="line">    c           *hchan         <span class="comment">// chan</span></span><br><span class="line">    pc          <span class="keyword">uintptr</span>        <span class="comment">// return pc</span></span><br><span class="line">    kind        <span class="keyword">uint16</span></span><br><span class="line">    so          <span class="keyword">uint16</span> <span class="comment">// vararg of selected bool</span></span><br><span class="line">    receivedp   *<span class="keyword">bool</span>  <span class="comment">// pointer to received bool (recv2)</span></span><br><span class="line">    releasetime <span class="keyword">int64</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <p>select最后是[1]scase表示select中只保存了一个case的空间，说明select只是个头部，select后面保存了所有的scase，这段Scases的大小就是tcase。在go runtime实现中经常看到这种头部+连续内存的方式。</p>
-<img src="/2017/11/07/go-select/Go-Select的实现/select1.png" style="zoom:40%">
+<img src="/2017/11/07/go-select/select1.png" style="zoom:40%">
 
 <h2 id="select的实现"><a href="#select的实现" class="headerlink" title="select的实现"></a>select的实现</h2><h3 id="select创建"><a href="#select创建" class="headerlink" title="select创建"></a>select创建</h3><p>在newSelect对象时已经知道了case的数目，并已经分配好上述空间。</p>
 <figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">selectsize</span><span class="params">(size <span class="keyword">uintptr</span>)</span> <span class="title">uintptr</span></span> &#123;</span><br><span class="line">    selsize := unsafe.Sizeof(hselect&#123;&#125;) +</span><br><span class="line">        (size<span class="number">-1</span>)*unsafe.Sizeof(hselect&#123;&#125;.scase[<span class="number">0</span>]) +</span><br><span class="line">        size*unsafe.Sizeof(*hselect&#123;&#125;.lockorder) +</span><br><span class="line">        size*unsafe.Sizeof(*hselect&#123;&#125;.pollorder)</span><br><span class="line">    <span class="keyword">return</span> round(selsize, _Int64Align)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newselect</span><span class="params">(sel *hselect, selsize <span class="keyword">int64</span>, size <span class="keyword">int32</span>)</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> selsize != <span class="keyword">int64</span>(selectsize(<span class="keyword">uintptr</span>(size))) &#123;</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">"runtime: bad select size "</span>, selsize, <span class="string">", want "</span>, selectsize(<span class="keyword">uintptr</span>(size)), <span class="string">"\n"</span>)</span><br><span class="line">        throw(<span class="string">"bad select size"</span>)</span><br><span class="line">    &#125;</span><br><span class="line">    sel.tcase = <span class="keyword">uint16</span>(size)</span><br><span class="line">    sel.ncase = <span class="number">0</span></span><br><span class="line">    sel.lockorder = (**hchan)(add(unsafe.Pointer(&amp;sel.scase), <span class="keyword">uintptr</span>(size)*unsafe.Sizeof(hselect&#123;&#125;.scase[<span class="number">0</span>])))</span><br><span class="line">    sel.pollorder = (*<span class="keyword">uint16</span>)(add(unsafe.Pointer(sel.lockorder), <span class="keyword">uintptr</span>(size)*unsafe.Sizeof(*hselect&#123;&#125;.lockorder)))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
@@ -769,7 +769,7 @@
 
     <footer id="footer" class="footer">
       <div class="footer-inner">
-        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2020</span>
   <span class="with-love" id="animate">
     <i class="fa fa-user"></i>
   </span>
